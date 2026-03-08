@@ -1,13 +1,14 @@
-# رادار المخاطر — Telegram Bot
 import feedparser
 import requests
 import hashlib
 import time
 
+# إعدادات البوت والقناة
 BOT_TOKEN  = "8676198122:AAHYs5AWT-vnCv8fTNloDvtAjbz6-chMVlk"
 CHANNEL_ID = "@egypt_risk_radar"
 API_URL    = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# المصادر الإخبارية
 SOURCES = [
     {"id": "youm7",        "name": "اليوم السابع",        "url": "https://www.youm7.com/rss/Section/22", "cat": "breaking"},
     {"id": "febanks_cbe",  "name": "في البنوك - المركزي", "url": "https://febanks.com/feed/",            "cat": "cbe"},
@@ -26,6 +27,7 @@ SOURCES = [
     {"id": "alaraby",      "name": "العربي الجديد",        "url": "https://www.alaraby.co.uk/feed",       "cat": "global"},
 ]
 
+# الكلمات المفتاحية للتصنيف
 RISK_KW    = ["تعثر","إفلاس","حجز","دعوى","غرامة","خسارة","ديون متعثرة","خفض تصنيف","مخالفة","تصفية","إعسار","حبس","انهيار","أزمة","تحقيق"]
 BREAKING_KW= ["عاجل","الآن","للتو","مستجد"]
 CBE_KW     = ["البنك المركزي","سعر الفائدة","لجنة السياسة النقدية","ريبو","سياسة نقدية","التضخم","قرار الفائدة"]
@@ -98,9 +100,9 @@ def format_msg(title, url, source_name, cl):
     lines.append(f"🏭  القطاع: {cl['industry']}")
     lines.append(f"📊  مستوى الخطر: {cl['risk_level']}")
     lines.append(f"📰  المصدر: {source_name}\n")
-    lines.append(f"[📎 اقرأ الخبر كاملاً]({url})\n")
+    lines.append(f"[📎 اقرأ الخبر كاملًا]({url})\n")
     lines.append("━━━━━━━━━━━━━━━━")
-    lines.append("🛡 @egypt\\_risk\\_radar")
+    lines.append("🛡 @egypt_risk_radar")
     return "\n".join(lines)
 
 def send(text):
@@ -108,50 +110,5 @@ def send(text):
         r = requests.post(f"{API_URL}/sendMessage", json={
             "chat_id": CHANNEL_ID, "text": text,
             "parse_mode": "Markdown", "disable_web_page_preview": False,
-        }, timeout=10)
-        return r.status_code == 200
-    except:
-        return False
-
-SENT_FILE = "sent_hashes.txt"
-
-def load_sent():
-    try:
-        with open(SENT_FILE) as f: return set(f.read().splitlines())
-    except: return set()
-
-def save_hash(h):
-    with open(SENT_FILE, "a") as f: f.write(h + "\n")
-
-def make_hash(title, sid):
-    return hashlib.md5(f"{title}{sid}".encode()).hexdigest()
-
-def run():
-    print("🛡 رادار المخاطر يعمل...")
-    sent = load_sent()
-    new_count = 0
-
-    for src in SOURCES:
-        print(f"  📡 {src['name']}...")
-        try:
-            feed = feedparser.parse(src["url"])
-            for entry in feed.entries[:10]:
-                title   = entry.get("title", "").strip()
-                url     = entry.get("link", "")
-                summary = entry.get("summary", "")[:300]
-                if not title or not is_arabic(title): continue
-                h = make_hash(title, src["id"])
-                if h in sent: continue
-                cl  = classify(title, summary, src["cat"])
-                msg = format_msg(title, url, src["name"], cl)
-                if send(msg):
-                    sent.add(h); save_hash(h); new_count += 1
-                    print(f"    ✅ {title[:60]}")
-                    time.sleep(2)
-        except Exception as e:
-            print(f"    ⚠️ {src['name']}: {e}")
-
-    print(f"\n✅ تم نشر {new_count} خبر جديد")
-
-if __name__ == "__main__":
-    run()
+        }, timeout=15)
+        return r.status_
