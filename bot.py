@@ -3,12 +3,10 @@ import requests
 import hashlib
 import time
 
-# إعدادات البوت والقناة
 BOT_TOKEN  = "8676198122:AAHYs5AWT-vnCv8fTNloDvtAjbz6-chMVlk"
 CHANNEL_ID = "@egypt_risk_radar"
 API_URL    = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
-# المصادر الإخبارية
 SOURCES = [
     {"id": "youm7",        "name": "اليوم السابع",        "url": "https://www.youm7.com/rss/Section/22", "cat": "breaking"},
     {"id": "febanks_cbe",  "name": "في البنوك - المركزي", "url": "https://febanks.com/feed/",            "cat": "cbe"},
@@ -27,7 +25,6 @@ SOURCES = [
     {"id": "alaraby",      "name": "العربي الجديد",        "url": "https://www.alaraby.co.uk/feed",       "cat": "global"},
 ]
 
-# الكلمات المفتاحية للتصنيف
 RISK_KW    = ["تعثر","إفلاس","حجز","دعوى","غرامة","خسارة","ديون متعثرة","خفض تصنيف","مخالفة","تصفية","إعسار","حبس","انهيار","أزمة","تحقيق"]
 BREAKING_KW= ["عاجل","الآن","للتو","مستجد"]
 CBE_KW     = ["البنك المركزي","سعر الفائدة","لجنة السياسة النقدية","ريبو","سياسة نقدية","التضخم","قرار الفائدة"]
@@ -64,29 +61,24 @@ def is_arabic(text):
 def classify(title, summary, source_cat):
     text = (title + " " + summary).lower()
     tabs = [source_cat] if source_cat != "breaking" else []
-
     risk_score  = sum(1 for k in RISK_KW if k in text)
     is_breaking = any(k in text for k in BREAKING_KW) or source_cat == "breaking"
     is_warning  = any(k in text for k in WARNING_KW) or risk_score >= 2
-
     if any(k in text for k in CBE_KW)    and "cbe"     not in tabs: tabs.append("cbe")
     if any(k in text for k in FX_KW)     and "fx"      not in tabs: tabs.append("fx")
     if any(k in text for k in CREDIT_KW) and "credit"  not in tabs: tabs.append("credit")
     if any(k in text for k in ["بنك","مصرف"]) and "banks" not in tabs: tabs.append("banks")
     if is_warning and "warning" not in tabs: tabs.append("warning")
     if not tabs: tabs.append("global")
-
     industry = "عام"
     for sector, kws in SECTOR_KW.items():
         if any(k in text for k in kws):
             industry = sector
             break
-
     if   risk_score >= 3: risk_level = "حرج 🔴"
     elif risk_score == 2: risk_level = "مرتفع 🟠"
     elif risk_score == 1: risk_level = "متوسط 🟡"
     else:                 risk_level = "منخفض 🟢"
-
     return {"tabs": tabs, "risk_level": risk_level, "industry": industry,
             "is_breaking": is_breaking, "is_warning": is_warning}
 
@@ -111,4 +103,31 @@ def send(text):
             "chat_id": CHANNEL_ID, "text": text,
             "parse_mode": "Markdown", "disable_web_page_preview": False,
         }, timeout=15)
-        return r.status_
+        return r.status_code == 200
+    except:
+        return False
+
+def run():
+    print("🛡 رادار المخاطر بدأ العمل...")
+    new_count = 0
+    for src in SOURCES:
+        print(f"  📡 جاري فحص: {src['name']}...")
+        try:
+            feed = feedparser.parse(src["url"])
+            for entry in feed.entries[:3]: 
+                title   = entry.get("title", "").strip()
+                url     = entry.get("link", "")
+                summary = entry.get("summary", "")[:300]
+                if not title or not is_arabic(title): continue
+                cl  = classify(title, summary, src["cat"])
+                msg = format_msg(title, url, src["name"], cl)
+                if send(msg):
+                    new_count += 1
+                    print(f"    ✅ تم نشر: {title[:50]}...")
+                    time.sleep(3)
+        except Exception as e:
+            print(f"    ⚠️ خطأ في {src['name']}: {e}")
+    print(f"\n✅ اكتملت المهمة. تم محاولة نشر {new_count} خبر جديد.")
+
+if __name__ == "__main__":
+    run()
