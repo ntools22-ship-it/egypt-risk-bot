@@ -1,0 +1,25 @@
+name: رادار المخاطر Bot
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # كل 6 ساعات
+  workflow_dispatch:         # تشغيل يدوي بضغطة زرار
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install feedparser requests
+
+      - name: Run bot
+        run: python bot.py
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
