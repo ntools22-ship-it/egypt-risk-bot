@@ -2,7 +2,7 @@ name: رادار المخاطر Bot
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # كل 6 ساعات
+    - cron: '0 */4 * * *'  # كل 4 ساعات
   workflow_dispatch:         # تشغيل يدوي بضغطة زرار
 
 jobs:
