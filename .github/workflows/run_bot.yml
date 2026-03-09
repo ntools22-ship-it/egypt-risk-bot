@@ -2,8 +2,14 @@ name: رادار المخاطر Bot
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # كل 4 ساعات
-  workflow_dispatch:         # تشغيل يدوي بضغطة زرار
+    - cron: '0 */4 * * *'   # أخبار كل 4 ساعات
+    - cron: '0 6 * * *'     # موجز يومي الساعة 8 صباحاً (توقيت مصر = 6 UTC)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'news = أخبار عادية | digest = موجز يومي'
+        required: false
+        default: 'news'
 
 jobs:
   run-bot:
@@ -19,7 +25,22 @@ jobs:
       - name: Install dependencies
         run: pip install feedparser requests
 
-      - name: Run bot
+      - name: تحديد الوضع
+        id: set_mode
+        run: |
+          HOUR=$(date -u +%H)
+          INPUT_MODE="${{ github.event.inputs.mode }}"
+          if [ "$INPUT_MODE" = "digest" ]; then
+            echo "mode=digest" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "06" ]; then
+            echo "mode=digest" >> $GITHUB_OUTPUT
+          else
+            echo "mode=news" >> $GITHUB_OUTPUT
+          fi
+
+      - name: تشغيل البوت
         run: python bot.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RUN_MODE: ${{ steps.set_mode.outputs.mode }}
