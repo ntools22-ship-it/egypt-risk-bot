@@ -1,101 +1,133 @@
 import feedparser, requests, hashlib, time, os
 
-BOT_TOKEN  = os.environ.get("BOT_TOKEN", "8676198122:AAHYs5AWT-vnCv8fTNloDvtAjbz6-chMVlk")
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
 CHANNEL_ID = "@egypt_risk_radar"
 API_URL    = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# ─── المصادر ───────────────────────────────────────────────────────────────
+# tab = None → ينشر فقط لو مطابق كلمات مفتاحية (إنذار مبكر أو تمويل)
 SOURCES = [
-    {"id":"youm7",       "name":"اليوم السابع",       "url":"https://www.youm7.com/rss/Section/22","cat":"breaking"},
-    {"id":"febanks",     "name":"في البنوك",           "url":"https://febanks.com/feed/",           "cat":"banks"},
-    {"id":"amwal",       "name":"أموال الغد",          "url":"https://www.amwalalghad.com/feed/",   "cat":"banks"},
-    {"id":"sahm",        "name":"سهم نيوز",            "url":"https://sahmnews.com/feed/",          "cat":"banks"},
-    {"id":"hapi",        "name":"حابي",                "url":"https://hapi.ps/feed/",               "cat":"credit"},
-    {"id":"almal",       "name":"المال",               "url":"https://almalnews.com/feed/",         "cat":"credit"},
-    {"id":"masrawy",     "name":"مصراوي",              "url":"https://www.masrawy.com/news/rss",    "cat":"sectors"},
-    {"id":"skynews",     "name":"سكاي نيوز عربية",    "url":"https://www.skynewsarabia.com/rss",   "cat":"global"},
-    {"id":"mubasher",    "name":"مباشر",               "url":"https://www.mubasher.info/feed",      "cat":"global"},
-    {"id":"alaraby",     "name":"العربي الجديد",       "url":"https://www.alaraby.co.uk/feed",      "cat":"global"},
+
+    # ⚡ عاجل
+    {"id": "youm7_breaking",    "name": "اليوم السابع",          "url": "https://www.youm7.com/rss/Section/65",                                                                          "tab": "breaking"},
+
+    # 🏦 أخبار البنوك
+    {"id": "amwal_banks",       "name": "أموال الغد - بنوك",     "url": "https://amwalalghad.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d9%85%d8%a4%d8%b3%d8%b3%d8%a7%d8%aa-%d9%85%d8%a7%d9%84%d9%8a%d8%a9/feed/", "tab": "banks"},
+
+    # 💰 تمويل وائتمان (مصادر ثابتة)
+    {"id": "amwal_micro",       "name": "أموال الغد - تمويل",    "url": "https://amwalalghad.com/tag/%d9%85%d8%aa%d9%86%d8%a7%d9%87%d9%8a-%d8%a7%d9%84%d8%b5%d8%ba%d8%b1/feed/",       "tab": "credit"},
+    {"id": "hapi_credit",       "name": "حابي - تمويل",          "url": "https://hapijournal.com/category/%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/",                                       "tab": "credit"},
+    {"id": "motawwer_credit",   "name": "المطور - تمويل",        "url": "https://almotawwer.com/tag/%d8%aa%d9%85%d9%88%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d8%b4%d8%b1%d9%88%d8%b9%d8%a7%d8%aa-%d8%a7%d9%84%d8%b5%d8%ba%d9%8a%d8%b1%d8%a9/feed/", "tab": "credit"},
+
+    # 💵 أسعار الدولار
+    {"id": "hapi_fx",           "name": "حابي - دولار",          "url": "https://hapijournal.com/tag/%d8%a3%d8%b3%d8%b9%d8%a7%d8%b1-%d8%a7%d9%84%d8%af%d9%88%d9%84%d8%a7%d8%b1/feed/", "tab": "fx"},
+
+    # 🏛️ أخبار المركزي
+    {"id": "almal_cbe",         "name": "المال - مركزي",         "url": "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/feed/", "tab": "cbe"},
+
+    # 🌍 اقتصاد الشرق والعالم
+    {"id": "alarabiya_economy", "name": "العربية - اقتصاد",      "url": "https://www.alarabiya.net/aswaq/economy.rss",                                                                   "tab": "global"},
+
+    # 🏗️ القطاعات الفرعية
+    {"id": "borsaa_agri",       "name": "البورصة نيوز - زراعة",  "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b2%d8%b1%d8%a7%d8%b9%d8%a9/feed/",                           "tab": "sector_agri"},
+    {"id": "borsaa_industry",   "name": "البورصة نيوز - صناعة",  "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b5%d9%86%d8%a7%d8%b9%d8%a9/feed/",                           "tab": "sector_industry"},
+    {"id": "borsaa_realestate", "name": "البورصة نيوز - عقارات", "url": "https://www.alborsaanews.com/category/%d8%a7%d9%84%d8%b9%d9%82%d8%a7%d8%b1%d8%a7%d8%aa/feed/",                "tab": "sector_realestate"},
+    {"id": "amwal_energy",      "name": "أموال الغد - طاقة",     "url": "https://amwalalghad.com/category/%d8%b7%d8%a7%d9%82%d8%a9/feed/",                                             "tab": "sector_energy"},
+    {"id": "amwal_transport",   "name": "أموال الغد - نقل",      "url": "https://amwalalghad.com/category/%d9%86%d9%82%d9%84-%d9%88-%d9%85%d9%84%d8%a7%d8%ad%d8%a9/feed/",             "tab": "sector_transport"},
+    {"id": "amwal_tech",        "name": "أموال الغد - تكنولوجيا","url": "https://amwalalghad.com/category/%d8%aa%d9%83%d9%86%d9%88%d9%84%d9%88%d8%ac%d9%8a%d8%a7-%d9%88%d8%a7%d8%aa%d8%b5%d8%a7%d9%84%d8%a7%d8%aa/feed/", "tab": "sector_tech"},
+
+    # ⚠️ إنذار مبكر — مسح بكلمات مفتاحية (tab=None)
+    {"id": "amwal_all",         "name": "أموال الغد",            "url": "https://amwalalghad.com/feed/",                  "tab": None},
+    {"id": "hapi_all",          "name": "حابي",                  "url": "https://hapijournal.com/feed/",                  "tab": None},
+    {"id": "almal_all",         "name": "المال",                 "url": "https://almalnews.com/feed/",                    "tab": None},
+    {"id": "febanks_all",       "name": "في البنوك",             "url": "https://febanks.com/feed/",                      "tab": None},
+    {"id": "sahm_all",          "name": "سهم نيوز",              "url": "https://sahmnews.com/feed/",                     "tab": None},
+    {"id": "borsaa_all",        "name": "البورصة نيوز",          "url": "https://www.alborsaanews.com/feed/",             "tab": None},
+    {"id": "mubasher_all",      "name": "مباشر",                 "url": "https://www.mubasher.info/feed/",                "tab": None},
+    {"id": "elborsa_all",       "name": "البورصة",               "url": "https://www.elborsa.com/feed/",                  "tab": None},
+    {"id": "masrawy_econ",      "name": "مصراوي اقتصاد",        "url": "https://www.masrawy.com/news/economy/rss",        "tab": None},
+    {"id": "youm7_econ",        "name": "اليوم السابع اقتصاد",  "url": "https://www.youm7.com/rss/Section/97",            "tab": None},
 ]
 
-RISK_KW    = ["تعثر","إفلاس","حجز","دعوى","غرامة","خسارة","مخالفة","تصفية","إعسار","انهيار","أزمة"]
-BREAKING_KW= ["عاجل","الآن","للتو","مستجد"]
-CBE_KW     = ["البنك المركزي","سعر الفائدة","السياسة النقدية","التضخم","قرار الفائدة","ريبو"]
-FX_KW      = ["سعر الدولار","سعر الصرف","الدولار اليوم","اليورو","احتياطي النقد","تعويم"]
-CREDIT_KW  = ["تسهيل ائتماني","قرض مشترك","توريق","سندات","صكوك","تمويل","ائتمان","جدولة"]
-WARNING_KW = ["تعثر","إفلاس","حجز","دعوى","غرامة","مخالفة","خفض تصنيف","إعسار"]
-
-SECTOR_KW = {
-    "عقارات":    ["عقارات","تطوير عقاري","إسكان","وحدات سكنية"],
-    "صناعة":     ["صناعة","مصنع","تصنيع"],
-    "طاقة":      ["طاقة","بترول","غاز","كهرباء","نفط"],
-    "زراعة":     ["زراعة","محاصيل","أغذية"],
-    "تكنولوجيا": ["تكنولوجيا","فنتك","رقمي","ذكاء اصطناعي"],
-    "سياحة":     ["سياحة","فنادق","سياحي"],
-    "بنوك":      ["بنك","مصرف","بنكي","مصرفي"],
-    "تجارة":     ["تجارة","استيراد","تصدير"],
-}
-
+# ─── تسميات التبويبات ───────────────────────────────────────────────────────
 TAB_LABELS = {
-    "breaking":"⚡ عاجل",
-    "banks":   "🏦 أخبار البنوك",
-    "credit":  "💰 تمويل وائتمان",
-    "warning": "⚠️ إنذار مبكر",
-    "sectors": "🏗️ أخبار القطاعات",
-    "fx":      "💵 أسعار الصرف",
-    "cbe":     "🏛️ أخبار المركزي",
-    "global":  "🌍 اقتصاد الشرق والعالم",
+    "breaking":          "⚡ عاجل",
+    "banks":             "🏦 أخبار البنوك",
+    "credit":            "💰 تمويل وائتمان",
+    "warning":           "⚠️ إنذار مبكر",
+    "fx":                "💵 أسعار الدولار",
+    "cbe":               "🏛️ أخبار المركزي",
+    "global":            "🌍 اقتصاد الشرق والعالم",
+    "sector_agri":       "🌾 زراعة",
+    "sector_industry":   "🏭 صناعة",
+    "sector_realestate": "🏗️ عقارات",
+    "sector_energy":     "⚡ طاقة",
+    "sector_transport":  "🚢 نقل وملاحة",
+    "sector_tech":       "💻 تكنولوجيا واتصالات",
 }
 
+# ─── كلمات مفتاحية — إنذار مبكر ────────────────────────────────────────────
+WARNING_KW = [
+    # تعثر وسداد
+    "تعثر", "تعثر في السداد", "عجز عن السداد", "توقف عن السداد",
+    "ديون متعثرة", "قروض متعثرة", "محفظة متعثرة", "ديون رديئة",
+    "مخصصات", "شطب ديون", "استرداد ديون", "NPL",
+    # إفلاس وإعسار
+    "إفلاس", "شهر إفلاس", "إعسار", "تصفية", "حراسة قضائية",
+    "إدارة قضائية", "تعليق النشاط", "وقف الأعمال",
+    "بيع أصول قسري", "تنازل عن أصول",
+    # قانوني ومالي
+    "حجز على أصول", "حجز على أموال", "دعوى قضائية", "نزاع مالي",
+    "غرامة مالية", "خفض تصنيف", "تخفيض تصنيف", "جدولة ديون",
+    "إعادة جدولة", "أزمة سيولة", "خسائر متراكمة", "مخالفة مالية",
+    "انهيار", "أزمة مالية", "إغلاق شركة", "شركة في ورطة",
+]
+
+# ─── كلمات مفتاحية — تمويل وائتمان ────────────────────────────────────────
+CREDIT_KW = [
+    "تسهيل ائتماني", "تسهيلات ائتمانية", "قرض", "تمويل",
+    "خط ائتماني", "توريق", "سندات", "صكوك", "قرض مشترك",
+    "تمويل مشترك", "اتفاقية تمويل", "اتفاقية قرض", "ائتمان",
+    "حصلت على تمويل", "وقعت اتفاقية", "منحة قرض", "موافقة ائتمانية",
+    "اعتماد مستندي", "ضمانات بنكية", "رسملة", "بروتوكول تمويل",
+    "مذكرة تفاهم", "تمويل مشروع", "تمويل المشروعات الصغيرة",
+    "متناهي الصغر", "تمويل متناهي", "قرض ميسر",
+]
+
+# ─── دوال مساعدة ────────────────────────────────────────────────────────────
 def is_arabic(text):
     count = sum(1 for c in text if '\u0600' <= c <= '\u06ff')
     return count / max(len(text), 1) > 0.3
 
-def classify(title, summary, source_cat):
-    text = (title + " " + summary)
-    tabs = [] if source_cat == "breaking" else [source_cat]
+def get_tabs(title, summary, primary_tab):
+    text = title + " " + summary
+    tabs = []
 
-    risk_score  = sum(1 for k in RISK_KW if k in text)
-    is_breaking = any(k in text for k in BREAKING_KW) or source_cat == "breaking"
-    is_warning  = any(k in text for k in WARNING_KW) or risk_score >= 2
+    # التبويب الأساسي للمصدر
+    if primary_tab:
+        tabs.append(primary_tab)
 
-    if any(k in text for k in CBE_KW)         and "cbe"     not in tabs: tabs.append("cbe")
-    if any(k in text for k in FX_KW)          and "fx"      not in tabs: tabs.append("fx")
-    if any(k in text for k in CREDIT_KW)      and "credit"  not in tabs: tabs.append("credit")
-    if any(k in text for k in ["بنك","مصرف"]) and "banks"   not in tabs: tabs.append("banks")
-    if is_warning                              and "warning" not in tabs: tabs.append("warning")
-    if not tabs: tabs.append("global")
+    # فحص كلمات إنذار مبكر
+    if any(k in text for k in WARNING_KW) and "warning" not in tabs:
+        tabs.append("warning")
 
-    industry = "عام"
-    for sector, kws in SECTOR_KW.items():
-        if any(k in text for k in kws):
-            industry = sector
-            break
+    # فحص كلمات تمويل وائتمان
+    if any(k in text for k in CREDIT_KW) and "credit" not in tabs:
+        tabs.append("credit")
 
-    if   risk_score >= 3: risk_level = "حرج 🔴"
-    elif risk_score == 2: risk_level = "مرتفع 🟠"
-    elif risk_score == 1: risk_level = "متوسط 🟡"
-    else:                 risk_level = "منخفض 🟢"
+    return tabs
 
-    return {
-        "tabs": tabs, "risk_level": risk_level,
-        "industry": industry, "is_breaking": is_breaking, "is_warning": is_warning
-    }
-
-def format_msg(title, url, source_name, cl):
-    tabs_str = "  |  ".join(TAB_LABELS.get(t, t) for t in cl["tabs"])
-    lines = []
-    if cl["is_breaking"]: lines.append("⚡ *عاجل*\n")
-    if cl["is_warning"]:  lines.append("🚨 *تحذير مبكر*\n")
-    # عنوان الخبر كاملاً كـ hyperlink
+def format_msg(title, url, source_name, tabs):
+    tabs_str = "  |  ".join(TAB_LABELS.get(t, t) for t in tabs)
     safe_title = title.replace("*","").replace("[","").replace("]","").replace("_","\\_")
-    lines.append(f"[{safe_title}]({url})\n")
-    lines.append(f"🗂  {tabs_str}")
-    lines.append(f"🏭  القطاع: {cl['industry']}")
-    lines.append(f"📊  مستوى الخطر: {cl['risk_level']}")
-    lines.append(f"📰  المصدر: {source_name}")
-    lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━")
-    lines.append("🛡 @egypt\\_risk\\_radar")
+    lines = [
+        f"[{safe_title}]({url})",
+        f"🗂  {tabs_str}",
+        f"📰  {source_name}",
+        "",
+        "━━━━━━━━━━━━━━━━",
+        "🛡 @egypt\\_risk\\_radar",
+    ]
     return "\n".join(lines)
 
 def send(text):
@@ -115,15 +147,20 @@ SENT_FILE = "sent_hashes.txt"
 
 def load_sent():
     try:
-        with open(SENT_FILE) as f: return set(f.read().splitlines())
-    except: return set()
+        with open(SENT_FILE) as f:
+            return set(f.read().splitlines())
+    except:
+        return set()
 
 def save_hash(h):
-    with open(SENT_FILE, "a") as f: f.write(h + "\n")
+    with open(SENT_FILE, "a") as f:
+        f.write(h + "\n")
 
-def make_hash(title, sid):
-    return hashlib.md5(f"{title}{sid}".encode()).hexdigest()
+def make_hash(title):
+    # hash على العنوان فقط لمنع التكرار من مصادر متعددة
+    return hashlib.md5(title.strip().encode()).hexdigest()
 
+# ─── التشغيل ─────────────────────────────────────────────────────────────────
 def run():
     print("🛡 رادار المخاطر — يعمل...")
     sent = load_sent()
@@ -133,26 +170,34 @@ def run():
         print(f"  📡 {src['name']}...")
         try:
             feed = feedparser.parse(src["url"])
-            for entry in feed.entries[:8]:
+            for entry in feed.entries[:10]:
                 title   = entry.get("title", "").strip()
                 url     = entry.get("link", "")
                 summary = entry.get("summary", "")[:400]
 
-                if not title or not url: continue
-                if not is_arabic(title): continue
+                if not title or not url:
+                    continue
+                if not is_arabic(title):
+                    continue
 
-                h = make_hash(title, src["id"])
-                if h in sent: continue
+                h = make_hash(title)
+                if h in sent:
+                    continue
 
-                cl  = classify(title, summary, src["cat"])
-                msg = format_msg(title, url, src["name"], cl)
+                tabs = get_tabs(title, summary, src["tab"])
+
+                # مصادر إنذار مبكر (tab=None) — لا تنشر إلا لو فيه تطابق
+                if not tabs:
+                    continue
+
+                msg = format_msg(title, url, src["name"], tabs)
 
                 if send(msg):
                     sent.add(h)
                     save_hash(h)
                     new_count += 1
                     print(f"    ✅ {title[:60]}")
-                    time.sleep(3)
+                    time.sleep(2)
                 else:
                     print(f"    ❌ فشل: {title[:40]}")
 
