@@ -25,33 +25,33 @@ HEADERS = {
 # ══════════════════════════════════════════════════════════════════
 RSS_SOURCES = [
     # 🏦 البنوك
-    {"id": "amwal_banks",       "name": "أموال الغد - بنوك",      "url": "https://amwalalghad.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d9%85%d8%a4%d8%b3%d8%b3%d8%a7%d8%aa-%d9%85%d8%a7%d9%84%d9%8a%d8%a9/feed/",     "tab": "banks"},
-    {"id": "masrafeyoun_banks", "name": "المصرفيون",               "url": "https://masrafeyoun.ebi.gov.eg/category/banksnews/feed/",                                                                                         "tab": "banks"},
+    {"id": "amwal_banks",       "name": "أموال الغد - بنوك",      "url": "https://amwalalghad.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d9%85%d8%a4%d8%b3%d8%b3%d8%a7%d8%aa-%d9%85%d8%a7%d9%84%d9%8a%d8%a9/feed/",     "tab": "banks",  "exclude": ["سعر"]},
+    {"id": "masrafeyoun_banks", "name": "المصرفيون",               "url": "https://masrafeyoun.ebi.gov.eg/category/banksnews/feed/",                                                                                         "tab": "banks",  "exclude": []},
     # 💰 تمويل
-    {"id": "hapi_credit",       "name": "حابي - تمويل",           "url": "https://hapijournal.com/category/%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/",                                                                           "tab": "credit"},
-    {"id": "motawwer_credit",   "name": "المطور - تمويل",         "url": "https://almotawwer.com/tag/%d8%aa%d9%85%d9%88%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d8%b4%d8%b1%d9%88%d8%b9%d8%a7%d8%aa-%d8%a7%d9%84%d8%b5%d8%ba%d9%8a%d8%b1%d8%a9/feed/", "tab": "credit"},
-    {"id": "amwal_micro",       "name": "أموال الغد - تمويل",     "url": "https://amwalalghad.com/tag/%d9%85%d8%aa%d9%86%d8%a7%d9%87%d9%8a-%d8%a7%d9%84%d8%b5%d8%ba%d8%b1/feed/",                                         "tab": "credit"},
+    {"id": "hapi_credit",       "name": "حابي - تمويل",           "url": "https://hapijournal.com/category/%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/",                                                                           "tab": "credit", "exclude": []},
+    {"id": "motawwer_credit",   "name": "المطور - تمويل",         "url": "https://almotawwer.com/tag/%d8%aa%d9%85%d9%88%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d8%b4%d8%b1%d9%88%d8%b9%d8%a7%d8%aa-%d8%a7%d9%84%d8%b5%d8%ba%d9%8a%d8%b1%d8%a9/feed/", "tab": "credit", "exclude": []},
+    {"id": "amwal_micro",       "name": "أموال الغد - تمويل",     "url": "https://amwalalghad.com/tag/%d9%85%d8%aa%d9%86%d8%a7%d9%87%d9%8a-%d8%a7%d9%84%d8%b5%d8%ba%d8%b1/feed/",                                         "tab": "credit", "exclude": []},
     # 💵 الدولار
-    {"id": "hapi_fx",           "name": "حابي - دولار",           "url": "https://hapijournal.com/tag/%d8%a3%d8%b3%d8%b9%d8%a7%d8%b1-%d8%a7%d9%84%d8%af%d9%88%d9%84%d8%a7%d8%b1/feed/",                                   "tab": "fx"},
-    # 🌍 عالمي
-    {"id": "bbc_ar",            "name": "BBC عربي - اقتصاد",      "url": "https://feeds.bbci.co.uk/arabic/business/rss.xml",                                                                                                "tab": "global"},
+    {"id": "hapi_fx",           "name": "حابي - دولار",           "url": "https://hapijournal.com/tag/%d8%a3%d8%b3%d8%b9%d8%a7%d8%b1-%d8%a7%d9%84%d8%af%d9%88%d9%84%d8%a7%d8%b1/feed/",                                   "tab": "fx",     "exclude": []},
+    # 🌍 عالمي — سكاي نيوز بدل BBC
+    {"id": "skynews_business",  "name": "سكاي نيوز - اقتصاد",    "url": "https://www.skynewsarabia.com/rss/business.xml",                                                                                                  "tab": "global", "exclude": []},
     # 🌾 زراعة
-    {"id": "borsaa_agri",       "name": "البورصة نيوز - زراعة",   "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b2%d8%b1%d8%a7%d8%b9%d8%a9/feed/",                                                              "tab": "sector_agri"},
+    {"id": "borsaa_agri",       "name": "البورصة نيوز - زراعة",   "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b2%d8%b1%d8%a7%d8%b9%d8%a9/feed/",                                                              "tab": "sector_agri",       "exclude": []},
     # 🏭 صناعة
-    {"id": "borsaa_industry",   "name": "البورصة نيوز - صناعة",   "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b5%d9%86%d8%a7%d8%b9%d8%a9/feed/",                                                              "tab": "sector_industry"},
+    {"id": "borsaa_industry",   "name": "البورصة نيوز - صناعة",   "url": "https://www.alborsaanews.com/tag/%d8%a7%d9%84%d8%b5%d9%86%d8%a7%d8%b9%d8%a9/feed/",                                                              "tab": "sector_industry",   "exclude": []},
     # 🏗️ عقارات
-    {"id": "borsaa_realestate", "name": "البورصة نيوز - عقارات",  "url": "https://www.alborsaanews.com/category/%d8%a7%d9%84%d8%b9%d9%82%d8%a7%d8%b1%d8%a7%d8%aa/feed/",                                                   "tab": "sector_realestate"},
+    {"id": "borsaa_realestate", "name": "البورصة نيوز - عقارات",  "url": "https://www.alborsaanews.com/category/%d8%a7%d9%84%d8%b9%d9%82%d8%a7%d8%b1%d8%a7%d8%aa/feed/",                                                   "tab": "sector_realestate", "exclude": []},
     # ⚡ طاقة
-    {"id": "amwal_energy",      "name": "أموال الغد - طاقة",      "url": "https://amwalalghad.com/category/%d8%b7%d8%a7%d9%82%d8%a9/feed/",                                                                                 "tab": "sector_energy"},
+    {"id": "amwal_energy",      "name": "أموال الغد - طاقة",      "url": "https://amwalalghad.com/category/%d8%b7%d8%a7%d9%82%d8%a9/feed/",                                                                                 "tab": "sector_energy",     "exclude": []},
     # 🚢 نقل
-    {"id": "amwal_transport",   "name": "أموال الغد - نقل",       "url": "https://amwalalghad.com/category/%d9%86%d9%82%d9%84-%d9%88-%d9%85%d9%84%d8%a7%d8%ad%d8%a9/feed/",                                                "tab": "sector_transport"},
+    {"id": "amwal_transport",   "name": "أموال الغد - نقل",       "url": "https://amwalalghad.com/category/%d9%86%d9%82%d9%84-%d9%88-%d9%85%d9%84%d8%a7%d8%ad%d8%a9/feed/",                                                "tab": "sector_transport",  "exclude": []},
     # 💻 تكنولوجيا
-    {"id": "amwal_tech",        "name": "أموال الغد - تكنولوجيا", "url": "https://amwalalghad.com/category/%d8%aa%d9%83%d9%86%d9%88%d9%84%d9%88%d8%ac%d9%8a%d8%a7-%d9%88%d8%a7%d8%aa%d8%b5%d8%a7%d9%84%d8%a7%d8%aa/feed/", "tab": "sector_tech"},
+    {"id": "amwal_tech",        "name": "أموال الغد - تكنولوجيا", "url": "https://amwalalghad.com/category/%d8%aa%d9%83%d9%86%d9%88%d9%84%d9%88%d8%ac%d9%8a%d8%a7-%d9%88%d8%a7%d8%aa%d8%b5%d8%a7%d9%84%d8%a7%d8%aa/feed/", "tab": "sector_tech",       "exclude": []},
     # ⚠️ كلمات مفتاحية
-    {"id": "hapi_all",          "name": "حابي",          "url": "https://hapijournal.com/feed/",                        "tab": None},
-    {"id": "febanks_all",       "name": "في البنوك",     "url": "https://febanks.com/feed/",                            "tab": None},
-    {"id": "borsaa_all",        "name": "البورصة نيوز",  "url": "https://www.alborsaanews.com/feed/",                    "tab": None},
-    {"id": "masrafeyoun_all",   "name": "المصرفيون",     "url": "https://masrafeyoun.ebi.gov.eg/feed/",                  "tab": None},
+    {"id": "hapi_all",          "name": "حابي",          "url": "https://hapijournal.com/feed/",                       "tab": None, "exclude": []},
+    {"id": "febanks_all",       "name": "في البنوك",     "url": "https://febanks.com/feed/",                           "tab": None, "exclude": []},
+    {"id": "borsaa_all",        "name": "البورصة نيوز",  "url": "https://www.alborsaanews.com/feed/",                   "tab": None, "exclude": []},
+    {"id": "masrafeyoun_all",   "name": "المصرفيون",     "url": "https://masrafeyoun.ebi.gov.eg/feed/",                 "tab": None, "exclude": []},
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -59,18 +59,20 @@ RSS_SOURCES = [
 # ══════════════════════════════════════════════════════════════════
 SCRAPE_SOURCES = [
     {
-        "id":   "independent_breaking",
-        "name": "Independent عربي",
-        "url":  "https://www.independentarabia.com/tags/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A",
-        "tab":  "breaking",
-        "base": "https://www.independentarabia.com",
+        "id":      "independent_breaking",
+        "name":    "Independent عربي",
+        "url":     "https://www.independentarabia.com/tags/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A",
+        "tab":     "breaking",
+        "base":    "https://www.independentarabia.com",
+        "exclude": [],
     },
     {
-        "id":   "almal_cbe",
-        "name": "المال - مركزي",
-        "url":  "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/",
-        "tab":  "cbe",
-        "base": "https://almalnews.com",
+        "id":      "almal_cbe",
+        "name":    "المال - مركزي",
+        "url":     "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/",
+        "tab":     "cbe",
+        "base":    "https://almalnews.com",
+        "exclude": [],
     },
 ]
 
@@ -92,6 +94,11 @@ TAB_LABELS = {
     "sector_transport":  "🚢 نقل وملاحة",
     "sector_tech":       "💻 تكنولوجيا واتصالات",
 }
+
+CBE_KW = [
+    "البنك المركزي", "المركزي المصري", "لجنة السياسة النقدية",
+    "سعر الفائدة", "الاحتياطي النقدي", "السياسة النقدية",
+]
 
 WARNING_KW = [
     "تعثر", "عجز عن السداد", "توقف عن السداد", "ديون متعثرة",
@@ -115,7 +122,11 @@ CREDIT_KW = [
     "متناهي الصغر", "قرض ميسر",
 ]
 
-DAILY_LOG = "daily_news.json"
+DIGEST_PRIORITY = [
+    "warning", "credit", "cbe", "banks", "fx", "global",
+    "breaking", "sector_agri", "sector_industry",
+    "sector_realestate", "sector_energy", "sector_transport", "sector_tech",
+]
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -129,13 +140,11 @@ def sb_headers():
     }
 
 def supabase_get_hashes():
-    """جيب الـ hashes من آخر 7 أيام لضمان عدم التكرار"""
     try:
         since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/news?select=hash&created_at=gte.{since}",
-            headers=sb_headers(),
-            timeout=10,
+            headers=sb_headers(), timeout=10,
         )
         if r.status_code == 200:
             return {item["hash"] for item in r.json()}
@@ -143,24 +152,54 @@ def supabase_get_hashes():
         print(f"Supabase get_hashes error: {e}")
     return set()
 
-def supabase_save(title, url, source_name, tabs, h):
-    """حفظ الخبر في Supabase"""
+def supabase_save_news(title, url, source_name, tabs, h):
     try:
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/news",
             headers={**sb_headers(), "Prefer": "resolution=ignore-duplicates"},
-            json={
-                "title":       title,
-                "url":         url,
-                "source_name": source_name,
-                "tabs":        tabs,
-                "hash":        h,
-            },
+            json={"title": title, "url": url, "source_name": source_name, "tabs": tabs, "hash": h},
             timeout=10,
         )
         return r.status_code in (200, 201, 204)
     except Exception as e:
         print(f"Supabase save error: {e}")
+        return False
+
+def supabase_get_last_24h():
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/news?select=title,tabs&created_at=gte.{since}&order=created_at.asc",
+            headers=sb_headers(), timeout=15,
+        )
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"Supabase get_last_24h error: {e}")
+    return []
+
+def supabase_save_digest(tab_key, tab_label, content, news_count, digest_date):
+    try:
+        # احذف الموجز القديم لنفس اليوم ونفس التبويب
+        requests.delete(
+            f"{SUPABASE_URL}/rest/v1/digest?tab_key=eq.{tab_key}&digest_date=eq.{digest_date}",
+            headers=sb_headers(), timeout=10,
+        )
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/digest",
+            headers=sb_headers(),
+            json={
+                "tab_key":    tab_key,
+                "tab_label":  tab_label,
+                "content":    content,
+                "news_count": news_count,
+                "digest_date": digest_date,
+            },
+            timeout=10,
+        )
+        return r.status_code in (200, 201, 204)
+    except Exception as e:
+        print(f"Supabase save_digest error: {e}")
         return False
 
 
@@ -174,8 +213,13 @@ def is_arabic(text):
 def get_tabs(title, summary, primary_tab):
     text = title + " " + summary
     tabs = []
-    if primary_tab:
+
+    # لو تبويبه banks وفيه كلمات المركزي — يروح cbe بدل banks
+    if primary_tab == "banks" and any(k in text for k in CBE_KW):
+        tabs.append("cbe")
+    elif primary_tab:
         tabs.append(primary_tab)
+
     if any(k in text for k in WARNING_KW) and "warning" not in tabs:
         tabs.append("warning")
     if any(k in text for k in CREDIT_KW) and "credit" not in tabs:
@@ -184,25 +228,6 @@ def get_tabs(title, summary, primary_tab):
 
 def make_hash(title):
     return hashlib.md5(title.strip().encode()).hexdigest()
-
-def load_daily_log():
-    try:
-        with open(DAILY_LOG, encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
-
-def save_to_daily_log(title, url, source_name, tabs):
-    log = load_daily_log()
-    log.append({
-        "title":  title,
-        "url":    url,
-        "source": source_name,
-        "tabs":   tabs,
-        "time":   datetime.now(timezone.utc).isoformat(),
-    })
-    with open(DAILY_LOG, "w", encoding="utf-8") as f:
-        json.dump(log, f, ensure_ascii=False, indent=2)
 
 def send(text):
     try:
@@ -229,10 +254,13 @@ def format_msg(title, url, source_name, tabs):
         "🛡 @egypt\\_risk\\_radar",
     ])
 
-def process_item(title, url, source_name, primary_tab, summary, sent_hashes):
+def process_item(title, url, source_name, primary_tab, summary, exclude, sent_hashes):
     if not title or not url:
         return False, sent_hashes
     if not is_arabic(title):
+        return False, sent_hashes
+    # فلترة الكلمات المستثناة
+    if any(kw in title for kw in exclude):
         return False, sent_hashes
 
     h = make_hash(title)
@@ -246,13 +274,12 @@ def process_item(title, url, source_name, primary_tab, summary, sent_hashes):
     msg = format_msg(title, url, source_name, tabs)
     if send(msg):
         sent_hashes.add(h)
-        supabase_save(title, url, source_name, tabs, h)
-        save_to_daily_log(title, url, source_name, tabs)
+        supabase_save_news(title, url, source_name, tabs, h)
         print(f"    ✅ {title[:60]}")
         time.sleep(2)
         return True, sent_hashes
 
-    print(f"    ❌ فشل إرسال: {title[:40]}")
+    print(f"    ❌ فشل: {title[:40]}")
     return False, sent_hashes
 
 
@@ -267,7 +294,7 @@ def fetch_rss(src, sent_hashes):
             title   = entry.get("title", "").strip()
             url     = entry.get("link", "")
             summary = entry.get("summary", "")[:400]
-            ok, sent_hashes = process_item(title, url, src["name"], src["tab"], summary, sent_hashes)
+            ok, sent_hashes = process_item(title, url, src["name"], src["tab"], summary, src.get("exclude", []), sent_hashes)
             if ok:
                 count += 1
     except Exception as e:
@@ -283,7 +310,7 @@ def fetch_scrape(src, sent_hashes):
     try:
         r = requests.get(src["url"], headers=HEADERS, timeout=10)
         if r.status_code != 200:
-            print(f"    ⚠️ Scrape HTTP {r.status_code}: {src['name']}")
+            print(f"    ⚠️ HTTP {r.status_code}: {src['name']}")
             return 0, sent_hashes
 
         soup  = BeautifulSoup(r.text, "html.parser")
@@ -293,25 +320,25 @@ def fetch_scrape(src, sent_hashes):
             h = article.find(["h1","h2","h3","h4"])
             a = article.find("a", href=True)
             if h and a:
-                title = h.get_text(strip=True)
-                link  = a["href"]
-                if not link.startswith("http"):
-                    link = src["base"] + link
-                if len(title) > 15:
-                    items.append((title, link))
+                t = h.get_text(strip=True)
+                l = a["href"]
+                if not l.startswith("http"):
+                    l = src["base"] + l
+                if len(t) > 15:
+                    items.append((t, l))
 
         if not items:
             for h in soup.find_all(["h2","h3"])[:20]:
                 a = h.find("a", href=True)
                 if a and len(h.get_text(strip=True)) > 15:
-                    title = h.get_text(strip=True)
-                    link  = a["href"]
-                    if not link.startswith("http"):
-                        link = src["base"] + link
-                    items.append((title, link))
+                    t = h.get_text(strip=True)
+                    l = a["href"]
+                    if not l.startswith("http"):
+                        l = src["base"] + l
+                    items.append((t, l))
 
         for title, link in items[:10]:
-            ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", sent_hashes)
+            ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", src.get("exclude", []), sent_hashes)
             if ok:
                 count += 1
 
@@ -334,14 +361,6 @@ def ask_gemini(prompt):
         print(f"Gemini error: {e}")
         return None
 
-def get_last_24h_news():
-    log    = load_daily_log()
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    return [
-        item for item in log
-        if datetime.fromisoformat(item["time"]) >= cutoff
-    ]
-
 def group_by_tab(news_list):
     grouped = {}
     for item in news_list:
@@ -352,52 +371,55 @@ def group_by_tab(news_list):
 def build_prompt(tab_label, headlines):
     headlines_text = "\n".join(f"- {h}" for h in headlines)
     return f"""أنت محلل أول في قسم المخاطر والائتمان في أحد البنوك المصرية الكبرى.
-لديك الأخبار التالية من تبويب "{tab_label}" خلال الـ 24 ساعة الماضية:
+لديك عناوين أخبار تبويب "{tab_label}" خلال الـ 24 ساعة الماضية:
 
 {headlines_text}
 
 المطلوب:
-1. موجز سريع للأخبار الأبرز في نقاط مختصرة
-2. تحليل دقيق: ما الذي يستوجب الانتباه من منظور مخاطر وائتمان؟
-3. توصية أو تعليق مهني واحد للعاملين في القطاع
+1. عناوين الأخبار الأبرز في نقاط مختصرة
+2. تحليل: ما الذي يستوجب الانتباه من منظور مخاطر وائتمان؟
+3. تعليق مهني واحد للعاملين في القطاع
 
 اكتب بأسلوب احترافي وموجز باللغة العربية، بدون مقدمات أو تحيات."""
 
 def run_daily_digest():
     print("📊 جاري إعداد الموجز اليومي...")
-    news = get_last_24h_news()
+
+    # اقرأ من Supabase
+    news = supabase_get_last_24h()
     if not news:
         print("لا توجد أخبار في الـ 24 ساعة الماضية")
         return
 
     grouped  = group_by_tab(news)
-    now      = datetime.now(timezone.utc) + timedelta(hours=2)
+    now      = datetime.now(timezone.utc) + timedelta(hours=2)  # توقيت مصر
     date_str = now.strftime("%d/%m/%Y")
 
+    # رسالة افتتاحية
     send(
-        f"🗞️ *نشرة رادار المخاطر — {date_str}*\n"
-        f"_تقرير يومي شامل لمتخصصي الائتمان والمخاطر_\n\n"
+        f"🗞️ *موجز أنباء وتحليلات — {date_str}*\n"
+        f"_تقرير يومي لمتخصصي الائتمان والمخاطر_\n\n"
         f"رصدنا اليوم *{len(news)} خبراً* في *{len(grouped)} قطاعات*\n\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"🛡 @egypt\\_risk\\_radar"
     )
     time.sleep(3)
 
-    priority = [
-        "warning","credit","cbe","banks","fx","global",
-        "breaking","sector_agri","sector_industry",
-        "sector_realestate","sector_energy","sector_transport","sector_tech"
-    ]
-    for tab in sorted(grouped.keys(), key=lambda x: priority.index(x) if x in priority else 99):
+    ordered_tabs = sorted(grouped.keys(), key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+
+    for tab in ordered_tabs:
         headlines = grouped[tab]
         if not headlines:
             continue
         tab_label = TAB_LABELS.get(tab, tab)
         print(f"  🤖 Gemini: {tab_label} ({len(headlines)} خبر)...")
+
         analysis = ask_gemini(build_prompt(tab_label, headlines))
         if not analysis:
             continue
+
         analysis = analysis.replace("**", "*")
+
         msg = (
             f"{'━'*16}\n"
             f"*{tab_label}*  \\| {len(headlines)} خبر\n"
@@ -407,11 +429,16 @@ def run_daily_digest():
         )
         if len(msg) > 4000:
             msg = msg[:3990] + "...\n\n🛡 @egypt\\_risk\\_radar"
+
         send(msg)
+
+        # حفظ في Supabase للموقع
+        supabase_save_digest(tab, tab_label, analysis, len(headlines), now.strftime("%Y-%m-%d"))
+
         time.sleep(5)
 
     send(
-        "✅ *انتهى تقرير اليوم*\n\n"
+        f"✅ *انتهى موجز {date_str}*\n\n"
         "تابع أخبار السوق لحظة بلحظة\n"
         "🛡 @egypt\\_risk\\_radar"
     )
