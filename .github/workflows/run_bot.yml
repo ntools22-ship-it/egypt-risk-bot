@@ -4,8 +4,8 @@ on:
   schedule:
     # كل 15 دقيقة — أخبار فورية
     - cron: '*/15 * * * *'
-    # موجز يومي 8 صباحاً بتوقيت مصر (6 UTC)
-    - cron: '0 6 * * *'
+    # موجز يومي 10 مساءً بتوقيت مصر (8 UTC)
+    - cron: '0 20 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -36,7 +36,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
             echo "mode=digest" >> $GITHUB_OUTPUT
           else
             echo "mode=news" >> $GITHUB_OUTPUT
