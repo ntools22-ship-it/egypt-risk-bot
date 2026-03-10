@@ -1,15 +1,21 @@
-name: رادار المخاطر Bot
+name: Egypt Risk Radar Bot
 
 on:
   schedule:
-    - cron: '0 */4 * * *'   # أخبار كل 4 ساعات
-    - cron: '0 6 * * *'     # موجز يومي الساعة 8 صباحاً (توقيت مصر = 6 UTC)
+    # كل 15 دقيقة — أخبار فورية
+    - cron: '*/15 * * * *'
+    # موجز يومي 8 صباحاً بتوقيت مصر (6 UTC)
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'news = أخبار عادية | digest = موجز يومي'
+        description: 'Run mode'
         required: false
         default: 'news'
+        type: choice
+        options:
+          - news
+          - digest
 
 jobs:
   run-bot:
@@ -17,30 +23,30 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install feedparser requests
+        run: pip install feedparser requests beautifulsoup4
 
-      - name: تحديد الوضع
-        id: set_mode
+      - name: Determine run mode
+        id: mode
         run: |
-          HOUR=$(date -u +%H)
-          INPUT_MODE="${{ github.event.inputs.mode }}"
-          if [ "$INPUT_MODE" = "digest" ]; then
-            echo "mode=digest" >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "06" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
             echo "mode=digest" >> $GITHUB_OUTPUT
           else
             echo "mode=news" >> $GITHUB_OUTPUT
           fi
 
-      - name: تشغيل البوت
-        run: python bot.py
+      - name: Run bot
         env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          RUN_MODE: ${{ steps.set_mode.outputs.mode }}
+          SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+          RUN_MODE:       ${{ steps.mode.outputs.mode }}
+        run: python bot.py
