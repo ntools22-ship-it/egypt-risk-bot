@@ -53,11 +53,13 @@ RSS_SOURCES = [
     {"id": "amwal_transport",   "name": "أموال الغد - نقل",       "url": "https://amwalalghad.com/category/%d9%86%d9%82%d9%84-%d9%88-%d9%85%d9%84%d8%a7%d8%ad%d8%a9/feed/",                                                "tab": "sector_transport",  "exclude": []},
     # 💻 تكنولوجيا
     {"id": "amwal_tech",        "name": "أموال الغد - تكنولوجيا", "url": "https://amwalalghad.com/category/%d8%aa%d9%83%d9%86%d9%88%d9%84%d9%88%d8%ac%d9%8a%d8%a7-%d9%88%d8%a7%d8%aa%d8%b5%d8%a7%d9%84%d8%a7%d8%aa/feed/", "tab": "sector_tech",       "exclude": []},
-    # ⚠️ كلمات مفتاحية
+    # 💼 استثمار — كلمات مفتاحية
     {"id": "hapi_all",          "name": "حابي",          "url": "https://hapijournal.com/feed/",                       "tab": None, "exclude": []},
     {"id": "febanks_all",       "name": "في البنوك",     "url": "https://febanks.com/feed/",                           "tab": None, "exclude": []},
     {"id": "borsaa_all",        "name": "البورصة نيوز",  "url": "https://www.alborsaanews.com/feed/",                   "tab": None, "exclude": []},
     {"id": "masrafeyoun_all",   "name": "المصرفيون",     "url": "https://masrafeyoun.ebi.gov.eg/feed/",                 "tab": None, "exclude": []},
+    # 💰 تمويل — بلوم
+    {"id": "bloom_banks",       "name": "بلوم - بنوك وتمويل", "url": "https://bloom-gate.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/", "tab": "credit", "exclude": []},
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -80,6 +82,23 @@ SCRAPE_SOURCES = [
         "base":    "https://almalnews.com",
         "exclude": [],
     },
+    {
+        "id":      "motawwer_invest",
+        "name":    "المطور - شركات واستثمار",
+        "url":     "https://almotawwer.com/category/companies-and-investments/",
+        "tab":     "sector_invest",
+        "base":    "https://almotawwer.com",
+        "exclude": [],
+    },
+    {
+        "id":      "almasdar_invest",
+        "name":    "المصدر - استثمار",
+        "url":     "https://www.almasdar.com/category/39/Investment",
+        "tab":     "sector_invest",
+        "base":    "https://www.almasdar.com",
+        "selector": "h3",
+        "exclude": [],
+    },
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -93,6 +112,7 @@ TAB_LABELS = {
     "fx":                "💵 أسعار الدولار",
     "cbe":               "🏛️ أخبار المركزي",
     "global":            "🌍 اقتصاد الشرق والعالم",
+    "sector_invest":     "💼 استثمار",
     "sector_agri":       "🌾 زراعة",
     "sector_industry":   "🏭 صناعة",
     "sector_realestate": "🏗️ عقارات",
@@ -130,7 +150,7 @@ CREDIT_KW = [
 
 DIGEST_PRIORITY = [
     "warning", "credit", "cbe", "banks", "fx", "global",
-    "breaking", "sector_agri", "sector_industry",
+    "breaking", "sector_invest", "sector_agri", "sector_industry",
     "sector_realestate", "sector_energy", "sector_transport", "sector_tech",
 ]
 
@@ -394,16 +414,29 @@ def fetch_scrape(src, sent_hashes):
         soup  = BeautifulSoup(r.text, "html.parser")
         items = []
 
-        for article in soup.find_all("article")[:15]:
-            h = article.find(["h1","h2","h3","h4"])
-            a = article.find("a", href=True)
-            if h and a:
-                t = h.get_text(strip=True)
-                l = a["href"]
-                if not l.startswith("http"):
-                    l = src["base"] + l
-                if len(t) > 15:
-                    items.append((t, l))
+        # لو في selector مخصص (زي المصدر - استثمار)
+        if src.get("selector"):
+            for el in soup.find_all(src["selector"])[:20]:
+                a = el.find("a", href=True) or el
+                if a:
+                    t = el.get_text(strip=True)
+                    l = a.get("href", src["url"])
+                    if not l.startswith("http"):
+                        l = src["base"] + l
+                    if len(t) > 15:
+                        items.append((t, l))
+
+        if not items:
+            for article in soup.find_all("article")[:15]:
+                h = article.find(["h1","h2","h3","h4"])
+                a = article.find("a", href=True)
+                if h and a:
+                    t = h.get_text(strip=True)
+                    l = a["href"]
+                    if not l.startswith("http"):
+                        l = src["base"] + l
+                    if len(t) > 15:
+                        items.append((t, l))
 
         if not items:
             for h in soup.find_all(["h2","h3"])[:20]:
