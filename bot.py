@@ -1,4 +1,4 @@
-import feedparser, requests, hashlib, time, os, json
+import feedparser, requests, hashlib, time, os, json, sys
 from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
 
@@ -10,8 +10,14 @@ GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 CHANNEL_ID   = "@egypt_risk_radar"
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", CHANNEL_ID)  # لإشعارات الأخطاء
 API_URL      = f"https://api.telegram.org/bot{BOT_TOKEN}"
 GEMINI_URL   = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+
+# ══════════════════════════════════════════════════════════════════
+# Telegram rate limit tracker (max 18 msg/دقيقة للأمان)
+# ══════════════════════════════════════════════════════════════════
+_msg_times: list = []  # timestamps للرسائل المبعوتة
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -140,17 +146,43 @@ def sb_headers():
     }
 
 def supabase_get_hashes():
+    """
+    جلب هاشات الأخبار آخر 7 أيام مع Pagination.
+    بترجع None لو فشل الاتصال — عشان البوت يوقف ومش يعيد نشر كل حاجة.
+    """
     try:
         since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news?select=hash&created_at=gte.{since}",
-            headers=sb_headers(), timeout=10,
-        )
-        if r.status_code == 200:
-            return {item["hash"] for item in r.json()}
+        all_hashes = set()
+        page_size   = 1000
+        offset      = 0
+
+        while True:
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/news",
+                params={
+                    "select":     "hash",
+                    "created_at": f"gte.{since}",
+                    "limit":      page_size,
+                    "offset":     offset,
+                },
+                headers=sb_headers(), timeout=15,
+            )
+            if r.status_code != 200:
+                print(f"Supabase get_hashes HTTP {r.status_code}")
+                return None
+
+            batch = r.json()
+            all_hashes.update(item["hash"] for item in batch)
+
+            if len(batch) < page_size:
+                break
+            offset += page_size
+
+        return all_hashes
+
     except Exception as e:
         print(f"Supabase get_hashes error: {e}")
-    return set()
+        return None
 
 def supabase_save_news(title, url, source_name, tabs, h):
     try:
@@ -227,9 +259,26 @@ def get_tabs(title, summary, primary_tab):
     return tabs
 
 def make_hash(title):
-    return hashlib.md5(title.strip().encode()).hexdigest()
+    # SHA-256 — متوافق مع الموقع (Web Crypto API)
+    return hashlib.sha256(title.strip().encode()).hexdigest()
 
 def send(text):
+    """إرسال رسالة مع حماية من rate limit تيليجرام (18 msg/دقيقة)"""
+    global _msg_times
+    now = time.time()
+
+    # امسح الـ timestamps الأقدم من دقيقة
+    _msg_times = [t for t in _msg_times if now - t < 60]
+
+    # لو وصلنا 18 رسالة في الدقيقة → نام الباقي
+    if len(_msg_times) >= 18:
+        oldest = _msg_times[0]
+        sleep_sec = 61 - (now - oldest)
+        if sleep_sec > 0:
+            print(f"    ⏳ Rate limit: نايم {sleep_sec:.1f} ثانية...")
+            time.sleep(sleep_sec)
+        _msg_times = []
+
     try:
         r = requests.post(f"{API_URL}/sendMessage", json={
             "chat_id":                  CHANNEL_ID,
@@ -237,10 +286,26 @@ def send(text):
             "parse_mode":               "Markdown",
             "disable_web_page_preview": False,
         }, timeout=15)
-        return r.status_code == 200
+        if r.status_code == 200:
+            _msg_times.append(time.time())
+            return True
+        print(f"    Telegram error: {r.status_code} {r.text[:100]}")
+        return False
     except Exception as e:
         print(f"Send error: {e}")
         return False
+
+
+def notify_admin(text):
+    """إشعار المسؤول بأي خطأ — بيبعت لـ ADMIN_CHAT_ID"""
+    try:
+        requests.post(f"{API_URL}/sendMessage", json={
+            "chat_id":    ADMIN_CHAT_ID,
+            "text":       f"⚠️ *رادار المخاطر — تنبيه*\n\n{text}",
+            "parse_mode": "Markdown",
+        }, timeout=10)
+    except Exception as e:
+        print(f"notify_admin error: {e}")
 
 def format_msg(title, url, source_name, tabs):
     tabs_str   = "  |  ".join(TAB_LABELS.get(t, t) for t in tabs)
@@ -276,7 +341,6 @@ def process_item(title, url, source_name, primary_tab, summary, exclude, sent_ha
         sent_hashes.add(h)
         supabase_save_news(title, url, source_name, tabs, h)
         print(f"    ✅ {title[:60]}")
-        time.sleep(2)
         return True, sent_hashes
 
     print(f"    ❌ فشل: {title[:40]}")
@@ -286,11 +350,25 @@ def process_item(title, url, source_name, primary_tab, summary, exclude, sent_ha
 # ══════════════════════════════════════════════════════════════════
 # جلب RSS
 # ══════════════════════════════════════════════════════════════════
+def is_recent(entry, hours=26):
+    """هل الخبر نُشر في آخر {hours} ساعة؟ لو مفيش تاريخ → يعدي (نشره)."""
+    pt = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not pt:
+        return True  # مفيش تاريخ → متتجاهلش
+    try:
+        pub = datetime(*pt[:6], tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - pub) <= timedelta(hours=hours)
+    except Exception:
+        return True
+
+
 def fetch_rss(src, sent_hashes):
     count = 0
     try:
         feed = feedparser.parse(src["url"])
-        for entry in feed.entries[:10]:
+        for entry in feed.entries[:15]:  # زودنا من 10 لـ 15 عشان نضمن التغطية
+            if not is_recent(entry):
+                continue
             title   = entry.get("title", "").strip()
             url     = entry.get("link", "")
             summary = entry.get("summary", "")[:400]
@@ -458,6 +536,13 @@ def run():
     print("🛡 رادار المخاطر — يعمل...")
     print("📦 جاري تحميل الأخبار المرسلة من Supabase...")
     sent_hashes = supabase_get_hashes()
+
+    if sent_hashes is None:
+        msg = "فشل الاتصال بـ Supabase — توقف التشغيل لمنع تكرار الأخبار.\nتحقق من الـ secrets في GitHub."
+        print(f"❌ {msg}")
+        notify_admin(msg)
+        sys.exit(1)
+
     print(f"   {len(sent_hashes)} خبر محفوظ مسبقاً")
 
     new_count = 0
