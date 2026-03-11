@@ -2,9 +2,9 @@ name: Egypt Risk Radar Bot
 
 on:
   schedule:
-    # كل 15 دقيقة — أخبار فورية
-    - cron: '*/15 * * * *'
-    # موجز يومي 10 مساءً بتوقيت مصر (8 UTC)
+    # تشغيل كل ساعتين بدل 15 دقيقة (توفيراً للـ Actions minutes)
+    - cron: '0 */2 * * *'
+    # موجز يومي الساعة 10 مساءً بتوقيت مصر (8 مساءً UTC)
     - cron: '0 20 * * *'
   workflow_dispatch:
     inputs:
@@ -48,5 +48,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+          ADMIN_CHAT_ID:  ${{ secrets.ADMIN_CHAT_ID }}
           RUN_MODE:       ${{ steps.mode.outputs.mode }}
         run: python bot.py
