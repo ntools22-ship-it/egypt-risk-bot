@@ -6,13 +6,14 @@ from bs4 import BeautifulSoup
 # إعدادات
 # ══════════════════════════════════════════════════════════════════
 BOT_TOKEN    = os.environ.get("BOT_TOKEN", "")
-GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
+GROQ_KEY     = os.environ.get("GROQ_API_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 CHANNEL_ID   = "@egypt_risk_radar"
-ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", CHANNEL_ID)  # لإشعارات الأخطاء
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", CHANNEL_ID)
 API_URL      = f"https://api.telegram.org/bot{BOT_TOKEN}"
-GEMINI_URL   = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama-3.3-70b-versatile"
 
 # ══════════════════════════════════════════════════════════════════
 # Telegram rate limit tracker (max 18 msg/دقيقة للأمان)
@@ -462,15 +463,29 @@ def fetch_scrape(src, sent_hashes):
 # ══════════════════════════════════════════════════════════════════
 # الموجز اليومي
 # ══════════════════════════════════════════════════════════════════
-def ask_gemini(prompt):
+def ask_groq(prompt):
+    if not GROQ_KEY:
+        print("GROQ_API_KEY مش موجود")
+        return None
     try:
-        r = requests.post(GEMINI_URL, json={
-            "contents": [{"parts": [{"text": prompt}]}]
-        }, timeout=60)
+        r = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1500,
+                "temperature": 0.3,
+            },
+            timeout=60,
+        )
         data = r.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        return data["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"Gemini error: {e}")
+        print(f"Groq error: {e} | status: {getattr(r, 'status_code', '?')} | response: {getattr(r, 'text', '')[:200]}")
         return None
 
 def group_by_tab(news_list):
@@ -526,9 +541,10 @@ def run_daily_digest():
         tab_label = TAB_LABELS.get(tab, tab)
         print(f"  🤖 Gemini: {tab_label} ({len(headlines)} خبر)...")
 
-        analysis = ask_gemini(build_prompt(tab_label, headlines))
+        analysis = ask_groq(build_prompt(tab_label, headlines))
         if not analysis:
-            continue
+            # Gemini فشل — ابعت العناوين مباشرة
+            analysis = "\n".join(f"• {h}" for h in headlines)
 
         analysis = analysis.replace("**", "*")
 
@@ -555,6 +571,80 @@ def run_daily_digest():
         "🛡 @egypt\\_risk\\_radar"
     )
     print("✅ انتهى الموجز اليومي")
+
+    # ── الموجز الصوتي ──────────────────────────────────────
+    send_voice_digest(grouped, date_str)
+
+
+def build_voice_script(grouped, date_str):
+    """بناء النص الصوتي المختصر للموجز"""
+    ordered = sorted(grouped.keys(), key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+
+    lines = [f"موجز رادار المخاطر — {date_str}."]
+    total = sum(len(v) for v in grouped.values())
+    lines.append(f"رصدنا اليوم {total} خبراً في {len(grouped)} قطاعات.")
+    lines.append("أبرز ما رصدناه:")
+
+    for tab in ordered[:6]:  # أهم 6 تبويبات بس عشان النص ما يطولش
+        headlines = grouped[tab]
+        tab_label = TAB_LABELS.get(tab, tab)
+        # خد أبرز خبرين بس من كل تبويب
+        for h in headlines[:2]:
+            lines.append(h.rstrip(".") + ".")
+
+    lines.append("تابع أخبار السوق لحظة بلحظة مع رادار المخاطر.")
+    return "\n".join(lines)
+
+
+def send_voice_digest(grouped, date_str):
+    """توليد الموجز الصوتي وإرساله على التيليجرام"""
+    if not GROQ_KEY:
+        print("⚠️ GROQ_API_KEY مش موجود — الموجز الصوتي متوقف")
+        return
+
+    print("🎙️ جاري توليد الموجز الصوتي...")
+    script = build_voice_script(grouped, date_str)
+
+    try:
+        # توليد الصوت
+        r = requests.post(
+            "https://api.groq.com/openai/v1/audio/speech",
+            headers={
+                "Authorization": f"Bearer {GROQ_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "canopylabs/orpheus-arabic-saudi",
+                "input": script,
+                "voice": "noura",
+                "response_format": "wav",
+            },
+            timeout=120,
+        )
+
+        if r.status_code != 200:
+            print(f"⚠️ TTS error HTTP {r.status_code}: {r.text[:200]}")
+            return
+
+        # إرسال على التيليجرام كـ voice message
+        voice_r = requests.post(
+            f"{API_URL}/sendVoice",
+            data={
+                "chat_id": CHANNEL_ID,
+                "caption": f"🎙️ *الموجز الصوتي — {date_str}*\n🛡 @egypt\\_risk\\_radar",
+                "parse_mode": "Markdown",
+            },
+            files={"voice": ("digest.wav", r.content, "audio/wav")},
+            timeout=60,
+        )
+
+        if voice_r.status_code == 200:
+            print("✅ تم إرسال الموجز الصوتي")
+        else:
+            print(f"⚠️ Telegram voice error: {voice_r.text[:200]}")
+
+    except Exception as e:
+        print(f"⚠️ Voice digest error: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════
