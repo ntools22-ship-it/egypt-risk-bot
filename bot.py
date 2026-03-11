@@ -171,7 +171,7 @@ def supabase_get_hashes():
     بترجع None لو فشل الاتصال — عشان البوت يوقف ومش يعيد نشر كل حاجة.
     """
     try:
-        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
         all_hashes = set()
         page_size   = 1000
         offset      = 0
@@ -219,13 +219,14 @@ def supabase_save_news(title, url, source_name, tabs, h):
 
 def supabase_get_last_24h():
     try:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
         r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news?select=title,tabs&created_at=gte.{since}&order=created_at.asc",
+            f"{SUPABASE_URL}/rest/v1/news?select=title,tabs&created_at=gte.{since}&order=created_at.asc&limit=1000",
             headers=sb_headers(), timeout=15,
         )
         if r.status_code == 200:
             return r.json()
+        print(f"Supabase get_last_24h HTTP {r.status_code}: {r.text[:100]}")
     except Exception as e:
         print(f"Supabase get_last_24h error: {e}")
     return []
