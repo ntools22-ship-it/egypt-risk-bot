@@ -95,8 +95,9 @@ SCRAPE_SOURCES = [
         "tab":     "breaking",
         "base":    "https://www.masrawy.com",
         "selector": "li",
-        "exclude": ["سعر", "أسعار", "مؤشر", "مؤشرات", "مواعيد", "الذهب", "الدولار", "الجنيه"],
+        "exclude": ["سعر", "أسعار", "مؤشر", "مؤشرات", "مواعيد", "الذهب", "الدولار", "الجنيه", "الرطوبة", "°", "%الرياح"],
         "exclude_except": ["أسعار النفط"],
+        "clean_prefix": ["اقتصاد"],
     },
     {
         "id":      "firstbank_banks",
@@ -485,6 +486,10 @@ def fetch_scrape(src, sent_hashes):
                     items.append((t, l))
 
         for title, link in items[:10]:
+            # تنظيف البادئة لو موجودة (زي "اقتصاد" في مصراوي)
+            for prefix in src.get("clean_prefix", []):
+                if title.startswith(prefix):
+                    title = title[len(prefix):].strip()
             ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", src.get("exclude", []), sent_hashes, src.get("exclude_except"))
             if ok:
                 count += 1
