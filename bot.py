@@ -392,14 +392,10 @@ def is_recent(entry, hours=26):
 
 def fetch_rss(src, sent_hashes):
     count = 0
-    skipped_old = 0
     skipped_hash = 0
     try:
         feed = feedparser.parse(src["url"])
         for entry in feed.entries[:15]:
-            if not is_recent(entry):
-                skipped_old += 1
-                continue
             title   = entry.get("title", "").strip()
             url     = entry.get("link", "")
             summary = entry.get("summary", "")[:400]
@@ -410,8 +406,8 @@ def fetch_rss(src, sent_hashes):
             ok, sent_hashes = process_item(title, url, src["name"], src["tab"], summary, src.get("exclude", []), sent_hashes)
             if ok:
                 count += 1
-        if skipped_old or skipped_hash:
-            print(f"    ↩️  {src['name']}: {skipped_old} قديم | {skipped_hash} مكرر | {count} جديد")
+        if skipped_hash or count:
+            print(f"    ↩️  {src['name']}: {skipped_hash} مكرر | {count} جديد")
     except Exception as e:
         print(f"    ⚠️ RSS error {src['name']}: {e}")
     return count, sent_hashes
@@ -423,7 +419,13 @@ def fetch_rss(src, sent_hashes):
 def fetch_scrape(src, sent_hashes):
     count = 0
     try:
-        r = requests.get(src["url"], headers=HEADERS, timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ar,en;q=0.9",
+            "Referer": "https://www.google.com/",
+        }
+        r = requests.get(src["url"], headers=headers, timeout=10)
         if r.status_code != 200:
             print(f"    ⚠️ HTTP {r.status_code}: {src['name']}")
             return 0, sent_hashes
