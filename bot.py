@@ -3,14 +3,14 @@ from datetime import datetime, timezone, timedelta
 from bs4 import BeautifulSoup
 
 # ══════════════════════════════════════════════════════════════════
-# 1. إعداد المحرك الجديد لتجاوز الحماية
+# 1. إعداد المحرك الجديد لتجاوز الحماية (Cloudscraper)
 # ══════════════════════════════════════════════════════════════════
 scraper = cloudscraper.create_scraper(
     browser={'browser': 'chrome', 'platform': 'android', 'desktop': False}
 )
 
 # ══════════════════════════════════════════════════════════════════
-# 2. الإعدادات والـ Secrets
+# 2. الإعدادات والرموز السرية
 # ══════════════════════════════════════════════════════════════════
 BOT_TOKEN     = os.environ.get("BOT_TOKEN", "")
 GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
@@ -22,13 +22,12 @@ API_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}"
 GROQ_URL      = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL    = "llama-3.3-70b-versatile"
 
-# تتبع معدل الإرسال (Rate Limit)
+# تتبع معدل الإرسال (Rate Limit) لمنع حظر التليجرام
 _msg_times = []
 
 # ══════════════════════════════════════════════════════════════════
 # 3. قوائم المصادر والكلمات المفتاحية
 # ══════════════════════════════════════════════════════════════════
-
 RSS_SOURCES = [
     {
         "name": "أموال الغد - بنوك",
@@ -44,7 +43,7 @@ RSS_SOURCES = [
 
 SCRAPE_SOURCES = [
     {"name": "المصرفيون", "url": "https://masrafeyoun.ebi.gov.eg/category/banksnews/", "tab": "بنوك", "base": "https://masrafeyoun.ebi.gov.eg"},
-    {"name": "المال - مركزي", "url": "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B3%D8%B1%D9%8A/", "tab": "مركزي", "base": "https://almalnews.com"},
+    {"name": "المال - مركزي", "url": "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8I-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/", "tab": "مركزي", "base": "https://almalnews.com"},
     {
         "name": "مصراوي - اقتصاد",
         "url": "https://www.masrawy.com/news/news_economy/section/206/%d8%a7%d9%82%d8%aa%d8%b5%d8%a7%d8%af",
@@ -55,11 +54,10 @@ SCRAPE_SOURCES = [
     {"name": "فيرست بنك", "url": "https://www.firstbankeg.com/List/10", "tab": "بنوك", "base": "https://www.firstbankeg.com", "clean_prefix": ["بنك", "البنك"]}
 ]
 
-KW = ["مركزي", "فائدة", "تضخم", "قرض", "تمويل", "استحواذ", "دمج", "سيولة", "دولار", "احتياطي", "ائتمان", "مخاطر", "تعثر", "ديون", "صندوق النقد", "شطب", "إفلاس", "تصنيف ائتماني", "رقابة"]
 TAB_LABELS = {"بنوك": "🏦 أخبار البنوك", "تمويل": "💰 التمويل والشركات", "مركزي": "🏛️ البنك المركزي", "اقتصاد": "📈 اقتصاد كلي"}
 
 # ══════════════════════════════════════════════════════════════════
-# 4. الدوال الأساسية
+# 4. الدوال المساعدة وقاعدة البيانات (Supabase)
 # ══════════════════════════════════════════════════════════════════
 
 def make_hash(text):
@@ -74,42 +72,45 @@ def supabase_get_hashes():
         url = f"{SUPABASE_URL}/rest/v1/sent_news?select=hash"
         headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
         r = requests.get(url, headers=headers, timeout=20)
-        if r.status_code == 200:
-            return {item["hash"] for item in r.json()}
-        return set()
-    except: return None
+        return {item["hash"] for item in r.json()} if r.status_code == 200 else set()
+    except: return set()
 
 def supabase_insert_hash(h, title):
     try:
         url = f"{SUPABASE_URL}/rest/v1/sent_news"
-        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json"}
         requests.post(url, headers=headers, json={"hash": h, "title": title[:200]}, timeout=20)
     except: pass
 
+def notify_admin(text):
+    try: requests.post(f"{API_URL}/sendMessage", json={"chat_id": ADMIN_CHAT_ID, "text": f"⚠️ نظام الرادار:\n{text}"})
+    except: pass
+
+# ══════════════════════════════════════════════════════════════════
+# 5. تحليل الذكاء الاصطناعي (Groq) والإرسال
+# ══════════════════════════════════════════════════════════════════
+
 def analyze_risk_with_groq(title, summary):
-    if not GROQ_KEY: return "تعذر التحليل: مفتاح GROQ مفقود."
-    prompt = f"حلل مخاطر الائتمان للخبر التالي باختصار شديد جدا (نقاط):\nالعنوان: {title}\nالتفاصيل: {summary}\nالرد بالعربية فقط."
+    if not GROQ_KEY: return "تحليل المخاطر غير متاح حالياً."
+    prompt = f"حلل مخاطر الائتمان للخبر التالي باختصار شديد (نقاط):\nالعنوان: {title}\nالتفاصيل: {summary}\nالرد بالعربية فقط."
     try:
         data = {"model": GROQ_MODEL, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2}
         r = requests.post(GROQ_URL, headers={"Authorization": f"Bearer {GROQ_KEY}"}, json=data, timeout=30)
         return r.json()["choices"][0]["message"]["content"]
-    except: return "فشل تحليل المخاطر آلياً."
+    except: return "تعذر التحليل الآلي للمخاطر."
 
 def send_telegram(text):
     global _msg_times
     now = time.time()
     _msg_times = [t for t in _msg_times if now - t < 60]
     if len(_msg_times) >= 18: time.sleep(5)
-    
     try:
-        r = requests.post(f"{API_URL}/sendMessage", json={"chat_id": CHANNEL_ID, "text": text, "parse_mode": "Markdown", "disable_web_page_preview": False}, timeout=25)
+        r = requests.post(f"{API_URL}/sendMessage", json={"chat_id": CHANNEL_ID, "text": text, "parse_mode": "Markdown"}, timeout=25)
         if r.status_code == 200: _msg_times.append(time.time())
     except: pass
 
 def process_item(title, url, source_name, tab, summary="", exclude_list=None, sent_hashes=None, exclude_except=None):
     if not is_arabic(title): return False, sent_hashes
-    
-    # فلترة الكلمات المستبعدة
     if exclude_list:
         for ex in exclude_list:
             if ex in title:
@@ -118,22 +119,19 @@ def process_item(title, url, source_name, tab, summary="", exclude_list=None, se
                     for excp in exclude_except:
                         if excp in title: is_safe = True; break
                 if not is_safe: return False, sent_hashes
-
     h = make_hash(title)
     if sent_hashes is not None and h in sent_hashes: return False, sent_hashes
 
-    # التحليل والإرسال
     risk = analyze_risk_with_groq(title, summary)
     label = TAB_LABELS.get(tab, "📢 أخبار")
     msg = f"{label}\n\n📌 *{title}*\n\n🔍 *تحليل المخاطر:*\n{risk}\n\n🔗 [المصدر: {source_name}]({url})"
-    
     send_telegram(msg)
     supabase_insert_hash(h, title)
     if sent_hashes is not None: sent_hashes.add(h)
     return True, sent_hashes
 
 # ══════════════════════════════════════════════════════════════════
-# 5. دوال الجلب (المحرك الجديد)
+# 6. دوال الجلب بالمحرك الجديد (Scraper)
 # ══════════════════════════════════════════════════════════════════
 
 def fetch_rss(src, sent_hashes):
@@ -168,14 +166,39 @@ def fetch_scrape(src, sent_hashes):
     return count, sent_hashes
 
 # ══════════════════════════════════════════════════════════════════
-# 6. التشغيل الرئيسي
+# 7. نظام الموجز الصوتي (Digest)
+# ══════════════════════════════════════════════════════════════════
+
+def run_daily_digest():
+    print("🎤 جاري إعداد الموجز الصوتي اليومي...")
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/sent_news?select=title&limit=10&order=created_at.desc"
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200: return
+        titles = [item["title"] for item in r.json()]
+        if not titles: return
+        
+        full_text = "إليك موجز أهم الأخبار البنكية والائتمانية لهذا اليوم: " + " . ".join(titles)
+        # إرسال طلب تحويل النص لصوت (باستخدام API تليجرام أو أي خدمة متوفرة لديك)
+        # للتبسيط، سنرسل الموجز كنص مجمع في هذه النسخة
+        digest_msg = "🎙️ *الموجز المسائي لأهم الأخبار:*\n\n" + "\n\n• ".join(titles)
+        send_telegram(digest_msg)
+    except: pass
+
+# ══════════════════════════════════════════════════════════════════
+# 8. التشغيل الرئيسي
 # ══════════════════════════════════════════════════════════════════
 
 def run():
-    print("🛡 رادار المخاطر — يعمل بالمحرك الجديد...")
-    sent_hashes = supabase_get_hashes()
-    if sent_hashes is None: sys.exit(1)
+    mode = os.environ.get("RUN_MODE", "news")
+    if mode == "digest":
+        run_daily_digest()
+        return
 
+    print("🛡 رادار المخاطر يعمل...")
+    sent_hashes = supabase_get_hashes()
+    
     for src in RSS_SOURCES:
         _, sent_hashes = fetch_rss(src, sent_hashes)
         time.sleep(2)
