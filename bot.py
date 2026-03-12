@@ -33,7 +33,6 @@ HEADERS = {
 RSS_SOURCES = [
     # 🏦 البنوك
     {"id": "amwal_banks",       "name": "أموال الغد - بنوك",      "url": "https://amwalalghad.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d9%85%d8%a4%d8%b3%d8%b3%d8%a7%d8%aa-%d9%85%d8%a7%d9%84%d9%8a%d8%a9/feed/",     "tab": "banks",  "exclude": ["سعر"]},
-    {"id": "masrafeyoun_banks", "name": "المصرفيون",               "url": "https://masrafeyoun.ebi.gov.eg/category/banksnews/feed/",                                                                                         "tab": "banks",  "exclude": []},
     # 💰 تمويل
     {"id": "hapi_credit",       "name": "حابي - تمويل",           "url": "https://hapijournal.com/category/%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/",                                                                           "tab": "credit", "exclude": []},
     {"id": "motawwer_credit",   "name": "المطور - تمويل",         "url": "https://almotawwer.com/tag/%d8%aa%d9%85%d9%88%d9%8a%d9%84-%d8%a7%d9%84%d9%85%d8%b4%d8%b1%d9%88%d8%b9%d8%a7%d8%aa-%d8%a7%d9%84%d8%b5%d8%ba%d9%8a%d8%b1%d8%a9/feed/", "tab": "credit", "exclude": []},
@@ -56,9 +55,6 @@ RSS_SOURCES = [
     {"id": "amwal_tech",        "name": "أموال الغد - تكنولوجيا", "url": "https://amwalalghad.com/category/%d8%aa%d9%83%d9%86%d9%88%d9%84%d9%88%d8%ac%d9%8a%d8%a7-%d9%88%d8%a7%d8%aa%d8%b5%d8%a7%d9%84%d8%a7%d8%aa/feed/", "tab": "sector_tech",       "exclude": []},
     # 💼 استثمار — كلمات مفتاحية
     {"id": "hapi_all",          "name": "حابي",          "url": "https://hapijournal.com/feed/",                       "tab": None, "exclude": []},
-    {"id": "febanks_all",       "name": "في البنوك",     "url": "https://febanks.com/feed/",                           "tab": None, "exclude": []},
-    {"id": "borsaa_all",        "name": "البورصة نيوز",  "url": "https://www.alborsaanews.com/feed/",                   "tab": None, "exclude": []},
-    {"id": "masrafeyoun_all",   "name": "المصرفيون",     "url": "https://masrafeyoun.ebi.gov.eg/feed/",                 "tab": None, "exclude": []},
     # 💰 تمويل — بلوم
     {"id": "bloom_banks",       "name": "بلوم - بنوك وتمويل", "url": "https://bloom-gate.com/category/%d8%a8%d9%86%d9%88%d9%83-%d9%88%d8%aa%d9%85%d9%88%d9%8a%d9%84/feed/", "tab": "credit", "exclude": []},
 ]
@@ -67,6 +63,15 @@ RSS_SOURCES = [
 # المصادر — Scraping
 # ══════════════════════════════════════════════════════════════════
 SCRAPE_SOURCES = [
+    {
+        "id":      "masrafeyoun_banks",
+        "name":    "المصرفيون",
+        "url":     "https://masrafeyoun.ebi.gov.eg/category/banksnews/",
+        "tab":     "banks",
+        "base":    "https://masrafeyoun.ebi.gov.eg",
+        "selector": "h2",
+        "exclude": [],
+    },
     {
         "id":      "independent_breaking",
         "name":    "Independent عربي",
@@ -81,23 +86,6 @@ SCRAPE_SOURCES = [
         "url":     "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/",
         "tab":     "cbe",
         "base":    "https://almalnews.com",
-        "exclude": [],
-    },
-    {
-        "id":      "motawwer_invest",
-        "name":    "المطور - شركات واستثمار",
-        "url":     "https://almotawwer.com/category/companies-and-investments/",
-        "tab":     "sector_invest",
-        "base":    "https://almotawwer.com",
-        "exclude": [],
-    },
-    {
-        "id":      "almasdar_invest",
-        "name":    "المصدر - استثمار",
-        "url":     "https://www.almasdar.com/category/39/Investment",
-        "tab":     "sector_invest",
-        "base":    "https://www.almasdar.com",
-        "selector": "h3",
         "exclude": [],
     },
 ]
