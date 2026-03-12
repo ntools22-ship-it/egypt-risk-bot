@@ -2,7 +2,7 @@ name: Egypt Risk Radar Bot
 
 on:
   schedule:
-    # كل ساعة من 7 صبح لـ 9 مساءً بتوقيت مصر (5-19 UTC) — الساعة 20 محجوزة للموجز
+    # كل ساعة من 7 صبح لـ 9 مساءً بتوقيت مصر (5-19 UTC)
     - cron: '0 5-19 * * *'
     # موجز يومي 10 مساءً بتوقيت مصر (20 UTC)
     - cron: '0 20 * * *'
@@ -26,10 +26,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install feedparser requests beautifulsoup4
+        run: |
+          pip install cloudscraper feedparser requests beautifulsoup4 supabase groq
 
       - name: Determine run mode
         id: mode
