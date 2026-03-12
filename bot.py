@@ -88,6 +88,34 @@ SCRAPE_SOURCES = [
         "base":    "https://almalnews.com",
         "exclude": [],
     },
+    {
+        "id":      "masrawy_breaking",
+        "name":    "مصراوي - عاجل",
+        "url":     "https://www.masrawy.com/news/news_economy/section/206/%d8%a7%d9%82%d8%aa%d8%b5%d8%a7%d8%af",
+        "tab":     "breaking",
+        "base":    "https://www.masrawy.com",
+        "selector": "li",
+        "exclude": ["سعر", "أسعار", "مؤشر", "مؤشرات", "مواعيد", "الذهب", "الدولار", "الجنيه"],
+        "exclude_except": ["أسعار النفط"],
+    },
+    {
+        "id":      "firstbank_banks",
+        "name":    "فيرست بنك",
+        "url":     "https://www.firstbankeg.com/List/10",
+        "tab":     "banks",
+        "base":    "https://www.firstbankeg.com",
+        "selector": "h3",
+        "exclude": ["دولار", "جنيه", "بورصة", "ذهب", "فرست بنك موقع"],
+    },
+    {
+        "id":      "osoul_industry",
+        "name":    "أصول مصر - شركات",
+        "url":     "https://www.osoulmisrmagazine.com/category/4038/1",
+        "tab":     "sector_industry",
+        "base":    "https://www.osoulmisrmagazine.com",
+        "selector": "h3",
+        "exclude": [],
+    },
 ]
 
 # ══════════════════════════════════════════════════════════════════
@@ -332,14 +360,15 @@ def format_msg(title, url, source_name, tabs):
         "🛡 @egypt\\_risk\\_radar",
     ])
 
-def process_item(title, url, source_name, primary_tab, summary, exclude, sent_hashes):
+def process_item(title, url, source_name, primary_tab, summary, exclude, sent_hashes, exclude_except=None):
     if not title or not url:
         return False, sent_hashes
     if not is_arabic(title):
         return False, sent_hashes
-    # فلترة الكلمات المستثناة
+    # فلترة الكلمات المستثناة — مع استثناء exclude_except
     if any(kw in title for kw in exclude):
-        return False, sent_hashes
+        if not exclude_except or not any(ex in title for ex in exclude_except):
+            return False, sent_hashes
 
     h = make_hash(title)
     if h in sent_hashes:
@@ -456,7 +485,7 @@ def fetch_scrape(src, sent_hashes):
                     items.append((t, l))
 
         for title, link in items[:10]:
-            ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", src.get("exclude", []), sent_hashes)
+            ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", src.get("exclude", []), sent_hashes, src.get("exclude_except"))
             if ok:
                 count += 1
 
