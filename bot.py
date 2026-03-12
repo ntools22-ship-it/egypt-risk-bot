@@ -460,6 +460,12 @@ def fetch_scrape(src, sent_hashes):
             if ok:
                 count += 1
 
+        skipped = len(items) - count if items else 0
+        if items:
+            print(f"    ↩️  {src['name']}: {len(items)} عنوان | {count} جديد | {skipped} مكرر")
+        else:
+            print(f"    ⚠️ {src['name']}: مفيش عناوين — selector ممكن اتغير")
+
     except Exception as e:
         print(f"    ⚠️ Scrape error {src['name']}: {e}")
     return count, sent_hashes
