@@ -189,7 +189,7 @@ def supabase_get_hashes():
                 headers=sb_headers(), timeout=15,
             )
             if r.status_code != 200:
-                print(f"Supabase get_hashes HTTP {r.status_code}")
+                print(f"Supabase get_hashes HTTP {r.status_code}: {r.text[:200]}")
                 return None
 
             batch = r.json()
@@ -199,6 +199,7 @@ def supabase_get_hashes():
                 break
             offset += page_size
 
+        print(f"   {len(all_hashes)} خبر محفوظ مسبقاً")
         return all_hashes
 
     except Exception as e:
@@ -213,6 +214,8 @@ def supabase_save_news(title, url, source_name, tabs, h):
             json={"title": title, "url": url, "source_name": source_name, "tabs": tabs, "hash": h},
             timeout=10,
         )
+        if r.status_code not in (200, 201, 409):
+            print(f"⚠️ save_news HTTP {r.status_code}: {r.text[:100]}")
         return r.status_code in (200, 201, 204)
     except Exception as e:
         print(f"Supabase save error: {e}")
@@ -379,24 +382,36 @@ def is_recent(entry, hours=26):
         return True  # مفيش تاريخ → متتجاهلش
     try:
         pub = datetime(*pt[:6], tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - pub) <= timedelta(hours=hours)
+        age = datetime.now(timezone.utc) - pub
+        if age > timedelta(hours=hours):
+            return False
+        return True
     except Exception:
         return True
 
 
 def fetch_rss(src, sent_hashes):
     count = 0
+    skipped_old = 0
+    skipped_hash = 0
     try:
         feed = feedparser.parse(src["url"])
-        for entry in feed.entries[:15]:  # زودنا من 10 لـ 15 عشان نضمن التغطية
+        for entry in feed.entries[:15]:
             if not is_recent(entry):
+                skipped_old += 1
                 continue
             title   = entry.get("title", "").strip()
             url     = entry.get("link", "")
             summary = entry.get("summary", "")[:400]
+            h = make_hash(title)
+            if sent_hashes is not None and h in sent_hashes:
+                skipped_hash += 1
+                continue
             ok, sent_hashes = process_item(title, url, src["name"], src["tab"], summary, src.get("exclude", []), sent_hashes)
             if ok:
                 count += 1
+        if skipped_old or skipped_hash:
+            print(f"    ↩️  {src['name']}: {skipped_old} قديم | {skipped_hash} مكرر | {count} جديد")
     except Exception as e:
         print(f"    ⚠️ RSS error {src['name']}: {e}")
     return count, sent_hashes
