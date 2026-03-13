@@ -48,9 +48,9 @@ EGYPT_KW = [
 
 import re as _re
 def clean_title(title, source_id=""):
-    """تنظيف العنوان — شيل 'منذ X ساعة/ساعات/دقيقة/دقائق' من مصراوي"""
+    """تنظيف العنوان — شيل 'منذ X ساعة/دقيقة...' من مصراوي بغض النظر عن المسافات"""
     if source_id == "masrawy_breaking":
-        title = _re.sub(r'منذ\s+\d+\s+(ساعة|ساعات|دقيقة|دقائق|يوم|أيام)', '', title).strip()
+        title = _re.sub(r'منذ\s*\d+\s*(ساعة|ساعات|دقيقة|دقائق|يوم|أيام)', '', title).strip()
     return title
 
 # ══════════════════════════════════════════════════════════════════
@@ -95,12 +95,23 @@ RSS_SOURCES = [
     },
     # ⚠️ إنذار مبكر — Google News (feeds موضوعية — نطاق عالمي)
     {
+        "id":           "asharq_gnews",
+        "name":         "اقتصاد الشرق - مصر",
+        "url":          "https://news.google.com/rss/search?q=site:asharqbusiness.com+مصر&hl=ar&gl=EG&ceid=EG:ar",
+        "tab":          "warning",
+        "exclude":      [],
+        "egypt_filter": True,
+        "clean_suffix": [" - اقتصاد الشرق مع بلومبرغ", " - اقتصاد الشرق"],
+        "max_age_hours": 48,
+    },
+    {
         "id":           "gnews_warning_debt",
         "name":         "إنذار - تعثر وديون",
         "url":          "https://news.google.com/rss/search?q=%D8%AA%D8%B9%D8%AB%D8%B1+OR+%D8%A5%D9%81%D9%84%D8%A7%D8%B3+OR+%D8%A5%D8%B9%D8%B3%D8%A7%D8%B1+OR+%D8%AC%D8%AF%D9%88%D9%84%D8%A9+%D8%AF%D9%8A%D9%88%D9%86+OR+%D8%AA%D8%AE%D9%84%D9%81+%D8%B3%D8%AF%D8%A7%D8%AF+OR+%D8%B4%D8%B7%D8%A8+%D9%82%D8%B1%D9%88%D8%B6+OR+%D8%A5%D8%B9%D8%A7%D8%AF%D8%A9+%D9%87%D9%8A%D9%83%D9%84%D8%A9&hl=ar&gl=EG&ceid=EG:ar",
         "tab":          "warning",
         "exclude":      [],
         "clean_suffix": [],
+        "max_age_hours": 48,
     },
     {
         "id":           "gnews_warning_rating",
@@ -109,6 +120,7 @@ RSS_SOURCES = [
         "tab":          "warning",
         "exclude":      [],
         "clean_suffix": [],
+        "max_age_hours": 48,
     },
     {
         "id":           "gnews_warning_legal",
@@ -117,6 +129,7 @@ RSS_SOURCES = [
         "tab":          "warning",
         "exclude":      [],
         "clean_suffix": [],
+        "max_age_hours": 48,
     },
     {
         "id":           "gnews_warning_macro",
@@ -125,6 +138,7 @@ RSS_SOURCES = [
         "tab":          "warning",
         "exclude":      [],
         "clean_suffix": [],
+        "max_age_hours": 48,
     },
 ]
 
@@ -503,6 +517,18 @@ def fetch_rss(src, sent_hashes):
             url     = entry.get("link", "")
             summary = entry.get("summary", "")[:400]
 
+            # فلتر حداثة الخبر — للـ feeds اللي عندها max_age_hours
+            if src.get("max_age_hours"):
+                pt = entry.get("published_parsed") or entry.get("updated_parsed")
+                if pt:
+                    try:
+                        pub = datetime(*pt[:6], tzinfo=timezone.utc)
+                        age = datetime.now(timezone.utc) - pub
+                        if age > timedelta(hours=src["max_age_hours"]):
+                            continue
+                    except:
+                        pass
+
             # شيل السوفيكس (زي " - اقتصاد الشرق مع بلومبرغ")
             for suffix in src.get("clean_suffix", []):
                 if title.endswith(suffix):
@@ -584,6 +610,8 @@ def fetch_scrape(src, sent_hashes):
             for prefix in src.get("clean_prefix", []):
                 if title.startswith(prefix):
                     title = title[len(prefix):].strip()
+            # تنظيف "منذ X ساعة/دقيقة" قبل حساب الـ hash
+            title = clean_title(title, src.get("id", ""))
             ok, sent_hashes = process_item(title, link, src["name"], src["tab"], "", src.get("exclude", []), sent_hashes, src.get("exclude_except"))
             if ok:
                 count += 1
