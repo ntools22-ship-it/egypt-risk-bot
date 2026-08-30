@@ -1,0 +1,57 @@
+name: Egypt Risk Radar Bot
+
+on:
+  schedule:
+    # أخبار كل 15 دقيقة
+    - cron: '*/15 * * * *'
+    # PDF الساعة 8 صباحاً بتوقيت مصر (6 UTC)
+    - cron: '0 6 * * *'
+    # موجز يومي الساعة 10 مساءً بتوقيت مصر (20 UTC)
+    - cron: '0 20 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'news'
+        type: choice
+        options:
+          - news
+          - digest
+          - pdf
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install feedparser requests beautifulsoup4 fpdf2 arabic-reshaper python-bidi
+
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+            echo "mode=pdf" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
+            echo "mode=digest" >> $GITHUB_OUTPUT
+          else
+            echo "mode=news" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run bot
+        env:
+          BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+          RUN_MODE:       ${{ steps.mode.outputs.mode }}
+        run: python bot.py
