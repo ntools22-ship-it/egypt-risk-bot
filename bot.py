@@ -9,7 +9,7 @@ import json
 import difflib
 
 from datetime import datetime, timezone, timedelta
-from urllib.parse import urljoin, urlparse, parse_qs, unquote
+from urllib.parse import urljoin, urlparse, parse_qs, unquote, quote
 
 from bs4 import BeautifulSoup
 
@@ -23,16 +23,23 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 CHANNEL_ID   = "@egypt_risk_radar"
 
-API_URL   = f"https://api.telegram.org/bot{BOT_TOKEN}"
+API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
 )
 
 FONT_PATH = "/tmp/Amiri-Regular.ttf"
-FONT_URL  = "https://github.com/aliftype/amiri/raw/main/fonts/Amiri-Regular.ttf"
+FONT_URL = (
+    "https://github.com/aliftype/amiri/raw/main/fonts/"
+    "Amiri-Regular.ttf"
+)
 
+
+# ══════════════════════════════════════════════════════════════════
 # الأخبار التي لا نريد نشرها
+# ══════════════════════════════════════════════════════════════════
 EXCLUDE_KW = [
     "مواعيد قطارات",
     "مواعيد القطار",
@@ -59,8 +66,10 @@ EXCLUDE_KW = [
     "مواعيد وسائل النقل",
 ]
 
-# كلمات تحديثات حقيقية.
-# إذا ظهر تحديث لنفس الحادث، لا نعتبره تكرارًا تلقائيًا.
+
+# ══════════════════════════════════════════════════════════════════
+# كلمات تحديثات حقيقية
+# ══════════════════════════════════════════════════════════════════
 UPDATE_KW = [
     "ارتفاع عدد",
     "حصيلة",
@@ -252,10 +261,6 @@ SCRAPE_SOURCES = [
         "base": "https://almalnews.com",
         "exclude": []
     },
-
-    # ──────────────────────────────────────────────────────────────
-    # جديد: Economy Plus → عاجل
-    # ──────────────────────────────────────────────────────────────
     {
         "id": "economyplus_breaking",
         "name": "Economy Plus - أخبار",
@@ -264,10 +269,6 @@ SCRAPE_SOURCES = [
         "base": "https://economyplusme.com",
         "exclude": []
     },
-
-    # ──────────────────────────────────────────────────────────────
-    # جديد: مصراوي → بحث حريق مصنع
-    # ──────────────────────────────────────────────────────────────
     {
         "id": "masrawy_factory_fire",
         "name": "مصراوي - حريق مصنع",
@@ -276,10 +277,6 @@ SCRAPE_SOURCES = [
         "base": "https://www.masrawy.com",
         "exclude": []
     },
-
-    # ──────────────────────────────────────────────────────────────
-    # جديد: Google News → بوابة الأهرام → حريق مصنع
-    # ──────────────────────────────────────────────────────────────
     {
         "id": "google_ahram_factory_fire",
         "name": "بوابة الأهرام - حريق مصنع",
@@ -419,16 +416,19 @@ def sb_headers():
 
 
 def supabase_get_hashes():
-    try:
-        since = (
-            datetime.now(timezone.utc) - timedelta(days=7)
-        ).isoformat()
+    """
+    تحميل Hashes من الأخبار المحفوظة.
 
+    يتم تحميل عدد كبير من السجلات بدل الاعتماد على آخر 7 أيام فقط.
+    """
+    try:
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/news"
-            f"?select=hash&created_at=gte.{since}",
+            f"?select=hash"
+            f"&order=created_at.desc"
+            f"&limit=10000",
             headers=sb_headers(),
-            timeout=10
+            timeout=20
         )
 
         if r.status_code == 200:
@@ -438,48 +438,164 @@ def supabase_get_hashes():
                 if item.get("hash")
             }
 
+        print(
+            f"Supabase get_hashes HTTP "
+            f"{r.status_code}: {r.text[:200]}"
+        )
+
     except Exception as e:
-        print(f"Supabase get_hashes error: {e}")
+        print(
+            f"Supabase get_hashes error: {e}"
+        )
 
     return set()
 
 
 def supabase_get_recent_news_for_dedupe():
     """
-    تحميل آخر 7 أيام من الأخبار.
-    نستخدم العنوان والرابط لمنع التكرار بين المصادر المختلفة.
-    لا نحتاج إلى تغيير بنية جدول Supabase.
+    تحميل الأخبار المحفوظة لاستخدامها في منع التكرار.
+
+    مهم:
+    المقارنة في الدالة التالية تتم داخل نفس المصدر فقط.
     """
     try:
-        since = (
-            datetime.now(timezone.utc) - timedelta(days=7)
-        ).isoformat()
-
         r = requests.get(
             f"{SUPABASE_URL}/rest/v1/news"
             f"?select=title,url,source_name,created_at"
-            f"&created_at=gte.{since}"
             f"&order=created_at.desc"
-            f"&limit=1000",
+            f"&limit=10000",
             headers=sb_headers(),
-            timeout=15
+            timeout=20
         )
 
         if r.status_code == 200:
             return r.json()
 
         print(
-            f"Supabase recent news HTTP {r.status_code}: "
-            f"{r.text[:200]}"
+            f"Supabase recent news HTTP "
+            f"{r.status_code}: {r.text[:200]}"
         )
 
     except Exception as e:
-        print(f"Supabase recent news error: {e}")
+        print(
+            f"Supabase recent news error: {e}"
+        )
 
     return []
 
 
-def supabase_save_news(title, url, source_name, tabs, h):
+def supabase_source_url_exists(
+    source_name,
+    url
+):
+    """
+    فحص مباشر في Supabase عن:
+        نفس المصدر + نفس الرابط
+
+    لا يوجد هنا حد زمني.
+    لذلك حتى لو كان الخبر محفوظًا منذ أشهر،
+    لن يتم نشره مرة أخرى من نفس المصدر.
+    """
+    try:
+        source_encoded = quote(
+            str(source_name),
+            safe=""
+        )
+
+        url_encoded = quote(
+            canonical_url(url),
+            safe=""
+        )
+
+        endpoint = (
+            f"{SUPABASE_URL}/rest/v1/news"
+            f"?select=id"
+            f"&source_name=eq.{source_encoded}"
+            f"&url=eq.{url_encoded}"
+            f"&limit=1"
+        )
+
+        r = requests.get(
+            endpoint,
+            headers=sb_headers(),
+            timeout=15
+        )
+
+        if r.status_code == 200:
+            return len(r.json()) > 0
+
+        print(
+            f"Supabase exact URL check HTTP "
+            f"{r.status_code}: {r.text[:200]}"
+        )
+
+    except Exception as e:
+        print(
+            f"Supabase exact URL check error: {e}"
+        )
+
+    return False
+
+
+def supabase_source_title_exists(
+    source_name,
+    title
+):
+    """
+    فحص مباشر:
+        نفس المصدر + نفس العنوان
+
+    هذا احتياطي إضافي في حالة تغير الرابط
+    مع بقاء عنوان الخبر كما هو.
+    """
+    try:
+        source_encoded = quote(
+            str(source_name),
+            safe=""
+        )
+
+        title_encoded = quote(
+            str(title),
+            safe=""
+        )
+
+        endpoint = (
+            f"{SUPABASE_URL}/rest/v1/news"
+            f"?select=id"
+            f"&source_name=eq.{source_encoded}"
+            f"&title=eq.{title_encoded}"
+            f"&limit=1"
+        )
+
+        r = requests.get(
+            endpoint,
+            headers=sb_headers(),
+            timeout=15
+        )
+
+        if r.status_code == 200:
+            return len(r.json()) > 0
+
+        print(
+            f"Supabase exact title check HTTP "
+            f"{r.status_code}: {r.text[:200]}"
+        )
+
+    except Exception as e:
+        print(
+            f"Supabase exact title check error: {e}"
+        )
+
+    return False
+
+
+def supabase_save_news(
+    title,
+    url,
+    source_name,
+    tabs,
+    h
+):
     try:
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/news",
@@ -497,17 +613,25 @@ def supabase_save_news(title, url, source_name, tabs, h):
             timeout=10
         )
 
-        return r.status_code in (200, 201, 204)
+        return r.status_code in (
+            200,
+            201,
+            204
+        )
 
     except Exception as e:
-        print(f"Supabase save error: {e}")
-        return False
+        print(
+            f"Supabase save error: {e}"
+        )
+
+    return False
 
 
 def supabase_get_last_24h():
     try:
         since = (
-            datetime.now(timezone.utc) - timedelta(hours=24)
+            datetime.now(timezone.utc)
+            - timedelta(hours=24)
         ).isoformat()
 
         r = requests.get(
@@ -523,7 +647,9 @@ def supabase_get_last_24h():
             return r.json()
 
     except Exception as e:
-        print(f"Supabase get_last_24h error: {e}")
+        print(
+            f"Supabase get_last_24h error: {e}"
+        )
 
     return []
 
@@ -532,7 +658,8 @@ def supabase_get_news_for_pdf():
     """أخبار آخر 24 ساعة مع كل الحقول للـ PDF"""
     try:
         since = (
-            datetime.now(timezone.utc) - timedelta(hours=24)
+            datetime.now(timezone.utc)
+            - timedelta(hours=24)
         ).isoformat()
 
         r = requests.get(
@@ -548,7 +675,9 @@ def supabase_get_news_for_pdf():
             return r.json()
 
     except Exception as e:
-        print(f"Supabase get_news_for_pdf error: {e}")
+        print(
+            f"Supabase get_news_for_pdf error: {e}"
+        )
 
     return []
 
@@ -582,30 +711,35 @@ def supabase_save_digest(
             timeout=10
         )
 
-        return r.status_code in (200, 201, 204)
+        return r.status_code in (
+            200,
+            201,
+            204
+        )
 
     except Exception as e:
-        print(f"Supabase save_digest error: {e}")
-        return False
+        print(
+            f"Supabase save_digest error: {e}"
+        )
+
+    return False
 
 
 # ══════════════════════════════════════════════════════════════════
-# دوال تنظيف ومقارنة الأخبار
+# تنظيف ومقارنة الأخبار
 # ══════════════════════════════════════════════════════════════════
 def normalize_arabic_text(text):
-    """
-    توحيد العنوان قبل المقارنة.
-    الهدف منع اختلافات بسيطة في الكتابة من إنتاج خبر مكرر.
-    """
     if not text:
         return ""
 
     text = str(text).lower().strip()
 
-    # إزالة التشكيل
-    text = re.sub(r"[\u064B-\u065F\u0670]", "", text)
+    text = re.sub(
+        r"[\u064B-\u065F\u0670]",
+        "",
+        text
+    )
 
-    # توحيد الحروف العربية
     replacements = {
         "أ": "ا",
         "إ": "ا",
@@ -618,7 +752,6 @@ def normalize_arabic_text(text):
     for old, new in replacements.items():
         text = text.replace(old, new)
 
-    # إزالة علامات الترقيم والرموز
     text = re.sub(
         r"[^\w\u0600-\u06FF]+",
         " ",
@@ -626,8 +759,11 @@ def normalize_arabic_text(text):
         flags=re.UNICODE
     )
 
-    # مسافات زائدة
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    ).strip()
 
     return text
 
@@ -635,12 +771,10 @@ def normalize_arabic_text(text):
 def title_tokens(text):
     normalized = normalize_arabic_text(text)
 
-    # كلمات شائعة جدًا لا تفيد في مقارنة الخبر
     stop_words = {
         "مصر",
         "اليوم",
         "غدا",
-        "اليوم",
         "المصري",
         "المصرية",
         "في",
@@ -665,7 +799,8 @@ def title_tokens(text):
     return {
         word
         for word in normalized.split()
-        if len(word) >= 2 and word not in stop_words
+        if len(word) >= 2
+        and word not in stop_words
     }
 
 
@@ -678,13 +813,10 @@ def is_update_title(title):
     )
 
 
-def titles_are_probable_duplicate(title1, title2):
-    """
-    مقارنة محافظة نسبيًا.
-    لا نحاول إثبات أن حادثين مختلفين هما نفس الخبر.
-    نعتبرهما تكرارًا فقط عندما تكون درجة التشابه مرتفعة.
-    """
-
+def titles_are_probable_duplicate(
+    title1,
+    title2
+):
     n1 = normalize_arabic_text(title1)
     n2 = normalize_arabic_text(title2)
 
@@ -710,21 +842,26 @@ def titles_are_probable_duplicate(title1, title2):
         return False
 
     common = t1 & t2
-    smaller = min(len(t1), len(t2))
+    smaller = min(
+        len(t1),
+        len(t2)
+    )
 
     overlap = len(common) / smaller
 
-    # تطابق قوي في الكلمات الأساسية + تشابه نصي معقول
-    if overlap >= 0.80 and ratio >= 0.58:
+    if (
+        overlap >= 0.80
+        and ratio >= 0.58
+    ):
         return True
 
     return False
 
 
-def is_excluded_title(title, extra_exclude=None):
-    """
-    استبعاد الأخبار غير المرغوبة مركزيًا.
-    """
+def is_excluded_title(
+    title,
+    extra_exclude=None
+):
     text = normalize_arabic_text(title)
 
     keywords = list(EXCLUDE_KW)
@@ -739,68 +876,81 @@ def is_excluded_title(title, extra_exclude=None):
     return False
 
 
-def is_recent_datetime(dt, max_age_hours=24):
+def is_recent_datetime(
+    dt,
+    max_age_hours=24
+):
     if not dt:
         return False
 
     now = datetime.now(timezone.utc)
 
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(
+            tzinfo=timezone.utc
+        )
 
     age = now - dt
 
-    # لا نقبل الأخبار المستقبلية بشكل غير طبيعي
     if age < timedelta(minutes=-10):
         return False
 
-    return age <= timedelta(hours=max_age_hours)
+    return age <= timedelta(
+        hours=max_age_hours
+    )
 
 
 def parse_any_datetime(value):
-    """
-    محاولة قراءة التاريخ من أكثر من صيغة.
-    """
     if not value:
         return None
 
     if isinstance(value, datetime):
         dt = value
+
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
+
         return dt
 
     value = str(value).strip()
 
-    # ISO 8601
     try:
         dt = datetime.fromisoformat(
-            value.replace("Z", "+00:00")
+            value.replace(
+                "Z",
+                "+00:00"
+            )
         )
 
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
 
         return dt
 
     except Exception:
         pass
 
-    # RFC / RSS
     try:
-        from email.utils import parsedate_to_datetime
+        from email.utils import (
+            parsedate_to_datetime
+        )
 
         dt = parsedate_to_datetime(value)
 
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(
+                tzinfo=timezone.utc
+            )
 
         return dt
 
     except Exception:
         pass
 
-    # صيغ مصرية شائعة
     formats = [
         "%d/%m/%Y %I:%M %p",
         "%d/%m/%Y %H:%M",
@@ -811,8 +961,15 @@ def parse_any_datetime(value):
 
     for fmt in formats:
         try:
-            dt = datetime.strptime(value, fmt)
-            return dt.replace(tzinfo=timezone.utc)
+            dt = datetime.strptime(
+                value,
+                fmt
+            )
+
+            return dt.replace(
+                tzinfo=timezone.utc
+            )
+
         except Exception:
             continue
 
@@ -820,18 +977,9 @@ def parse_any_datetime(value):
 
 
 # ══════════════════════════════════════════════════════════════════
-# استخراج تاريخ المقال من صفحة الخبر
+# استخراج تاريخ المقال
 # ══════════════════════════════════════════════════════════════════
 def extract_article_date(url):
-    """
-    يزور صفحة المقال ويحاول الحصول على تاريخ النشر/التحديث.
-    الأولوية:
-    1. datePublished
-    2. article:published_time
-    3. meta date
-    4. time datetime
-    5. dateModified كحل أخير
-    """
 
     try:
         r = requests.get(
@@ -853,9 +1001,12 @@ def extract_article_date(url):
             "script",
             type="application/ld+json"
         ):
+
             try:
                 data = json.loads(
-                    script.get_text(strip=True)
+                    script.get_text(
+                        strip=True
+                    )
                 )
 
                 objects = []
@@ -863,14 +1014,23 @@ def extract_article_date(url):
                 if isinstance(data, dict):
                     objects.append(data)
 
-                    if isinstance(data.get("@graph"), list):
-                        objects.extend(data["@graph"])
+                    if isinstance(
+                        data.get("@graph"),
+                        list
+                    ):
+                        objects.extend(
+                            data["@graph"]
+                        )
 
                 elif isinstance(data, list):
                     objects.extend(data)
 
                 for obj in objects:
-                    if not isinstance(obj, dict):
+
+                    if not isinstance(
+                        obj,
+                        dict
+                    ):
                         continue
 
                     published = (
@@ -878,7 +1038,9 @@ def extract_article_date(url):
                         or obj.get("datepublished")
                     )
 
-                    dt = parse_any_datetime(published)
+                    dt = parse_any_datetime(
+                        published
+                    )
 
                     if dt:
                         return dt
@@ -899,12 +1061,19 @@ def extract_article_date(url):
         ]
 
         for attr, value in meta_names:
+
             tag = soup.find(
                 "meta",
-                attrs={attr: value}
+                attrs={
+                    attr: value
+                }
             )
 
-            if tag and tag.get("content"):
+            if (
+                tag
+                and tag.get("content")
+            ):
+
                 dt = parse_any_datetime(
                     tag.get("content")
                 )
@@ -914,13 +1083,19 @@ def extract_article_date(url):
 
         # time datetime
         for tag in soup.find_all("time"):
+
             value = (
                 tag.get("datetime")
                 or tag.get("content")
-                or tag.get_text(" ", strip=True)
+                or tag.get_text(
+                    " ",
+                    strip=True
+                )
             )
 
-            dt = parse_any_datetime(value)
+            dt = parse_any_datetime(
+                value
+            )
 
             if dt:
                 return dt
@@ -930,9 +1105,12 @@ def extract_article_date(url):
             "script",
             type="application/ld+json"
         ):
+
             try:
                 data = json.loads(
-                    script.get_text(strip=True)
+                    script.get_text(
+                        strip=True
+                    )
                 )
 
                 objects = []
@@ -940,19 +1118,32 @@ def extract_article_date(url):
                 if isinstance(data, dict):
                     objects.append(data)
 
-                    if isinstance(data.get("@graph"), list):
-                        objects.extend(data["@graph"])
+                    if isinstance(
+                        data.get("@graph"),
+                        list
+                    ):
+                        objects.extend(
+                            data["@graph"]
+                        )
 
                 elif isinstance(data, list):
                     objects.extend(data)
 
                 for obj in objects:
-                    if not isinstance(obj, dict):
+
+                    if not isinstance(
+                        obj,
+                        dict
+                    ):
                         continue
 
-                    modified = obj.get("dateModified")
+                    modified = obj.get(
+                        "dateModified"
+                    )
 
-                    dt = parse_any_datetime(modified)
+                    dt = parse_any_datetime(
+                        modified
+                    )
 
                     if dt:
                         return dt
@@ -961,6 +1152,7 @@ def extract_article_date(url):
                 continue
 
     except Exception as e:
+
         print(
             f"      ⚠️ Date extraction error "
             f"{url[:80]}: {e}"
@@ -973,32 +1165,54 @@ def extract_article_date(url):
 # دوال مساعدة
 # ══════════════════════════════════════════════════════════════════
 def is_arabic(text):
+
     count = sum(
         1
         for c in text
         if "\u0600" <= c <= "\u06ff"
     )
 
-    return count / max(len(text), 1) > 0.3
+    return (
+        count / max(
+            len(text),
+            1
+        )
+        > 0.3
+    )
 
 
-def get_tabs(title, summary, primary_tab):
+def get_tabs(
+    title,
+    summary,
+    primary_tab
+):
     text = title + " " + summary
+
     tabs = []
 
-    if primary_tab == "banks" and any(
-        k in text for k in CBE_KW
+    if (
+        primary_tab == "banks"
+        and any(
+            k in text
+            for k in CBE_KW
+        )
     ):
         tabs.append("cbe")
 
     elif primary_tab:
         tabs.append(primary_tab)
 
-    if any(k in text for k in WARNING_KW):
+    if any(
+        k in text
+        for k in WARNING_KW
+    ):
         if "warning" not in tabs:
             tabs.append("warning")
 
-    if any(k in text for k in CREDIT_KW):
+    if any(
+        k in text
+        for k in CREDIT_KW
+    ):
         if "credit" not in tabs:
             tabs.append("credit")
 
@@ -1006,7 +1220,9 @@ def get_tabs(title, summary, primary_tab):
 
 
 def make_hash(title):
-    normalized = normalize_arabic_text(title)
+    normalized = normalize_arabic_text(
+        title
+    )
 
     return hashlib.md5(
         normalized.encode("utf-8")
@@ -1014,22 +1230,18 @@ def make_hash(title):
 
 
 def canonical_url(url):
-    """
-    توحيد الرابط قبل المقارنة.
-    """
+
     if not url:
         return ""
 
     url = url.strip()
 
-    # إزالة fragment
     parsed = urlparse(url)
 
     clean = parsed._replace(
         fragment=""
     ).geturl()
 
-    # إزالة بعض بارامترات التتبع
     parsed = urlparse(clean)
 
     query = parse_qs(
@@ -1048,6 +1260,7 @@ def canonical_url(url):
     filtered = {}
 
     for key, values in query.items():
+
         if any(
             key.lower().startswith(prefix)
             for prefix in tracking_prefixes
@@ -1059,12 +1272,16 @@ def canonical_url(url):
     query_parts = []
 
     for key in sorted(filtered):
+
         for value in filtered[key]:
+
             query_parts.append(
                 f"{key}={value}"
             )
 
-    query_string = "&".join(query_parts)
+    query_string = "&".join(
+        query_parts
+    )
 
     result = parsed._replace(
         query=query_string,
@@ -1075,7 +1292,9 @@ def canonical_url(url):
 
 
 def send(text):
+
     try:
+
         r = requests.post(
             f"{API_URL}/sendMessage",
             json={
@@ -1090,7 +1309,11 @@ def send(text):
         return r.status_code == 200
 
     except Exception as e:
-        print(f"Send error: {e}")
+
+        print(
+            f"Send error: {e}"
+        )
+
         return False
 
 
@@ -1100,8 +1323,12 @@ def format_msg(
     source_name,
     tabs
 ):
+
     tabs_str = "  |  ".join(
-        TAB_LABELS.get(t, t)
+        TAB_LABELS.get(
+            t,
+            t
+        )
         for t in tabs
     )
 
@@ -1124,21 +1351,54 @@ def format_msg(
 
 
 # ══════════════════════════════════════════════════════════════════
-# فحص التكرار المركزي
+# منع التكرار — داخل نفس المصدر فقط
 # ══════════════════════════════════════════════════════════════════
-def is_duplicate_against_recent(
+def is_duplicate_from_same_source(
     title,
     url,
+    source_name,
     recent_news
 ):
+    """
+    مهم جدًا:
+
+    لا نقارن الأخبار بين المصادر.
+
+    مثال:
+        Economy Plus + خبر A
+        Masrawy + خبر A
+
+    هذا ليس تكرارًا بالنسبة للنظام.
+
+    المقارنة تحدث فقط إذا كان:
+        source_name == source_name
+    """
+
     current_url = canonical_url(url)
 
-    current_norm = normalize_arabic_text(title)
+    current_norm = normalize_arabic_text(
+        title
+    )
 
     for item in recent_news:
 
+        old_source = item.get(
+            "source_name",
+            ""
+        )
+
+        # ==========================================================
+        # أهم شرط:
+        # تجاهل أي خبر من مصدر مختلف
+        # ==========================================================
+        if old_source != source_name:
+            continue
+
         old_url = canonical_url(
-            item.get("url", "")
+            item.get(
+                "url",
+                ""
+            )
         )
 
         old_title = item.get(
@@ -1146,32 +1406,112 @@ def is_duplicate_against_recent(
             ""
         )
 
-        # 1 — نفس الرابط
-        if current_url and old_url:
-            if current_url == old_url:
-                return True, "نفس الرابط"
+        # ==========================================================
+        # 1 — نفس الرابط من نفس المصدر
+        # ==========================================================
+        if (
+            current_url
+            and old_url
+            and current_url == old_url
+        ):
+            return (
+                True,
+                "نفس الرابط من نفس المصدر"
+            )
 
-        # 2 — نفس العنوان بعد التطبيع
+        # ==========================================================
+        # 2 — نفس العنوان من نفس المصدر
+        # ==========================================================
         old_norm = normalize_arabic_text(
             old_title
         )
 
-        if current_norm and old_norm:
-            if current_norm == old_norm:
-                return True, "نفس العنوان"
+        if (
+            current_norm
+            and old_norm
+            and current_norm == old_norm
+        ):
+            return (
+                True,
+                "نفس العنوان من نفس المصدر"
+            )
 
-        # 3 — تشابه قوي للعناوين
-        # إذا كان الخبر الحالي تحديثًا، نسمح به.
+        # ==========================================================
+        # 3 — تشابه قوي داخل نفس المصدر
+        #
+        # إذا كان الخبر تحديثًا حقيقيًا،
+        # نسمح به.
+        # ==========================================================
         if not is_update_title(title):
+
             if titles_are_probable_duplicate(
                 title,
                 old_title
             ):
-                return True, "عنوان مشابه جدًا"
+                return (
+                    True,
+                    "عنوان مشابه جدًا من نفس المصدر"
+                )
 
-    return False, ""
+    return (
+        False,
+        ""
+    )
 
 
+# ══════════════════════════════════════════════════════════════════
+# فحص إضافي مباشر في قاعدة البيانات
+# ══════════════════════════════════════════════════════════════════
+def database_duplicate_check(
+    title,
+    url,
+    source_name
+):
+    """
+    طبقة حماية إضافية.
+
+    لا تعتمد على recent_news فقط.
+
+    يتم البحث مباشرة في Supabase عن الخبر
+    من نفس المصدر.
+
+    1. نفس الرابط
+    2. نفس العنوان
+    """
+
+    # ==============================================================
+    # نفس المصدر + نفس الرابط
+    # ==============================================================
+    if supabase_source_url_exists(
+        source_name,
+        url
+    ):
+        return (
+            True,
+            "نفس الرابط موجود مسبقًا في Supabase"
+        )
+
+    # ==============================================================
+    # نفس المصدر + نفس العنوان
+    # ==============================================================
+    if supabase_source_title_exists(
+        source_name,
+        title
+    ):
+        return (
+            True,
+            "نفس العنوان موجود مسبقًا في Supabase"
+        )
+
+    return (
+        False,
+        ""
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
+# معالجة الخبر
+# ══════════════════════════════════════════════════════════════════
 def process_item(
     title,
     url,
@@ -1183,64 +1523,151 @@ def process_item(
     recent_news,
     published_at=None
 ):
+
     if not title or not url:
-        return False, sent_hashes, recent_news
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
 
     title = title.strip()
+
     url = canonical_url(url)
 
+    # ==============================================================
     # 1 — عربي
+    # ==============================================================
     if not is_arabic(title):
-        return False, sent_hashes, recent_news
+        print(
+            f"    ⛔ غير عربي: {title[:70]}"
+        )
 
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
+
+    # ==============================================================
     # 2 — استبعادات
+    # ==============================================================
     if is_excluded_title(
         title,
         exclude
     ):
+
         print(
             f"    ⛔ مستبعد: {title[:80]}"
         )
 
-        return False, sent_hashes, recent_news
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
 
+    # ==============================================================
     # 3 — تاريخ الخبر
+    # ==============================================================
     if published_at is not None:
+
         if not is_recent_datetime(
             published_at,
             max_age_hours=24
         ):
+
             print(
                 f"    ⏳ خبر قديم: "
                 f"{title[:70]}"
             )
 
-            return False, sent_hashes, recent_news
+            return (
+                False,
+                sent_hashes,
+                recent_news
+            )
 
+    # ==============================================================
     # 4 — Hash
+    # ==============================================================
     h = make_hash(title)
 
     if h in sent_hashes:
-        return False, sent_hashes, recent_news
 
-    # 5 — مقارنة مع الأخبار المنشورة من جميع المصادر
+        print(
+            f"    ♻️ Hash مكرر: "
+            f"{title[:70]}"
+        )
+
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
+
+    # ==============================================================
+    # 5 — فحص الذاكرة الحالية
+    #
+    # لكن داخل نفس المصدر فقط.
+    # ==============================================================
     duplicate, reason = (
-        is_duplicate_against_recent(
+        is_duplicate_from_same_source(
             title,
             url,
+            source_name,
             recent_news
         )
     )
 
     if duplicate:
+
         print(
-            f"    ♻️ مكرر ({reason}): "
+            f"    ♻️ مكرر داخل نفس المصدر "
+            f"({reason}): "
             f"{title[:70]}"
         )
 
-        return False, sent_hashes, recent_news
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
 
-    # 6 — تصنيف
+    # ==============================================================
+    # 6 — فحص مباشر في Supabase
+    #
+    # لا يعتمد على آخر 7 أيام.
+    # ==============================================================
+    duplicate, reason = (
+        database_duplicate_check(
+            title,
+            url,
+            source_name
+        )
+    )
+
+    if duplicate:
+
+        print(
+            f"    ♻️ مكرر في قاعدة البيانات "
+            f"({reason}): "
+            f"{title[:70]}"
+        )
+
+        # نضيف الـ hash إلى الذاكرة المحلية
+        # لتقليل الفحوصات في نفس التشغيل.
+        sent_hashes.add(h)
+
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
+
+    # ==============================================================
+    # 7 — تصنيف
+    # ==============================================================
     tabs = get_tabs(
         title,
         summary,
@@ -1248,9 +1675,21 @@ def process_item(
     )
 
     if not tabs:
-        return False, sent_hashes, recent_news
 
-    # 7 — النشر
+        print(
+            f"    ⚠️ بدون تبويب: "
+            f"{title[:70]}"
+        )
+
+        return (
+            False,
+            sent_hashes,
+            recent_news
+        )
+
+    # ==============================================================
+    # 8 — تجهيز الرسالة
+    # ==============================================================
     msg = format_msg(
         title,
         url,
@@ -1258,11 +1697,15 @@ def process_item(
         tabs
     )
 
+    # ==============================================================
+    # 9 — الإرسال
+    # ==============================================================
     if send(msg):
 
-        sent_hashes.add(h)
-
-        supabase_save_news(
+        # ==========================================================
+        # 10 — حفظ الخبر في Supabase
+        # ==========================================================
+        saved = supabase_save_news(
             title,
             url,
             source_name,
@@ -1270,8 +1713,26 @@ def process_item(
             h
         )
 
-        # إضافة الخبر إلى الذاكرة الحالية
-        # حتى لا يكرر مصدر آخر الخبر في نفس التشغيل
+        if not saved:
+
+            print(
+                "    ⚠️ تم إرسال الخبر إلى Telegram "
+                "لكن فشل حفظه في Supabase!"
+            )
+
+            # لا نعتبره محفوظًا في الذاكرة
+            # حتى لا نعطي انطباعًا زائفًا.
+            #
+            # لكن Telegram تم الإرسال بالفعل.
+            # في التشغيل القادم سيعاد فحصه.
+            #
+            # هذا يطبع تحذيرًا واضحًا في Actions.
+
+        # ==========================================================
+        # 11 — تحديث الذاكرة المحلية
+        # ==========================================================
+        sent_hashes.add(h)
+
         recent_news.insert(
             0,
             {
@@ -1297,7 +1758,8 @@ def process_item(
         )
 
     print(
-        f"    ❌ فشل: {title[:60]}"
+        f"    ❌ فشل الإرسال: "
+        f"{title[:60]}"
     )
 
     return (
@@ -1311,13 +1773,16 @@ def process_item(
 # RSS
 # ══════════════════════════════════════════════════════════════════
 def get_feed_entry_date(entry):
+
     for field in (
         "published_parsed",
         "updated_parsed"
     ):
+
         value = entry.get(field)
 
         if value:
+
             try:
                 from calendar import timegm
 
@@ -1336,6 +1801,7 @@ def get_feed_entry_date(entry):
         "updated",
         "created"
     ):
+
         value = entry.get(field)
 
         dt = parse_any_datetime(value)
@@ -1351,17 +1817,29 @@ def fetch_rss(
     sent_hashes,
     recent_news
 ):
+
     count = 0
 
     try:
+
         feed = feedparser.parse(
             src["url"]
         )
 
-        for entry in feed.entries[:15]:
+        print(
+            f"    📦 RSS returned "
+            f"{len(feed.entries)} entries"
+        )
 
-            published_at = get_feed_entry_date(
-                entry
+        # ==========================================================
+        # لا نستخدم [:15]
+        #
+        # حتى لا نفوّت خبرًا بسبب عدد ثابت.
+        # ==========================================================
+        for entry in feed.entries:
+
+            published_at = (
+                get_feed_entry_date(entry)
             )
 
             ok, sent_hashes, recent_news = (
@@ -1394,6 +1872,7 @@ def fetch_rss(
                 count += 1
 
     except Exception as e:
+
         print(
             f"    ⚠️ RSS error "
             f"{src['name']}: {e}"
@@ -1407,9 +1886,13 @@ def fetch_rss(
 
 
 # ══════════════════════════════════════════════════════════════════
-# أدوات Scraping عامة
+# أدوات Scraping
 # ══════════════════════════════════════════════════════════════════
-def absolute_url(base, href):
+def absolute_url(
+    base,
+    href
+):
+
     if not href:
         return ""
 
@@ -1427,17 +1910,27 @@ def absolute_url(base, href):
 def extract_listing_items(
     soup,
     base,
-    limit=15
+    limit=None
 ):
+
     items = []
 
     seen_urls = set()
 
-    # المقالات أولاً
-    for article in soup.find_all("article"):
+    # ==============================================================
+    # المقالات
+    # ==============================================================
+    for article in soup.find_all(
+        "article"
+    ):
 
         heading = article.find(
-            ["h1", "h2", "h3", "h4"]
+            [
+                "h1",
+                "h2",
+                "h3",
+                "h4"
+            ]
         )
 
         if not heading:
@@ -1467,7 +1960,10 @@ def extract_listing_items(
             anchor.get("href")
         )
 
-        if len(title) < 15 or not link:
+        if (
+            len(title) < 15
+            or not link
+        ):
             continue
 
         link = canonical_url(link)
@@ -1478,17 +1974,33 @@ def extract_listing_items(
         seen_urls.add(link)
 
         items.append(
-            (title, link)
+            (
+                title,
+                link
+            )
         )
 
-        if len(items) >= limit:
+        if (
+            limit is not None
+            and len(items) >= limit
+        ):
             break
 
+    # ==============================================================
     # fallback
-    if len(items) < limit:
+    # ==============================================================
+    if (
+        limit is None
+        or len(items) < limit
+    ):
 
         for heading in soup.find_all(
-            ["h1", "h2", "h3", "h4"]
+            [
+                "h1",
+                "h2",
+                "h3",
+                "h4"
+            ]
         ):
 
             anchor = heading.find(
@@ -1509,7 +2021,10 @@ def extract_listing_items(
                 anchor.get("href")
             )
 
-            if len(title) < 15 or not link:
+            if (
+                len(title) < 15
+                or not link
+            ):
                 continue
 
             link = canonical_url(link)
@@ -1520,10 +2035,16 @@ def extract_listing_items(
             seen_urls.add(link)
 
             items.append(
-                (title, link)
+                (
+                    title,
+                    link
+                )
             )
 
-            if len(items) >= limit:
+            if (
+                limit is not None
+                and len(items) >= limit
+            ):
                 break
 
     return items
@@ -1533,11 +2054,7 @@ def extract_listing_items(
 # Google News
 # ══════════════════════════════════════════════════════════════════
 def google_news_real_url(href):
-    """
-    Google News قد يستخدم:
-    /url?q=...
-    أو رابطًا مباشرًا.
-    """
+
     if not href:
         return ""
 
@@ -1546,6 +2063,7 @@ def google_news_real_url(href):
     parsed = urlparse(href)
 
     if parsed.path == "/url":
+
         qs = parse_qs(
             parsed.query
         )
@@ -1554,6 +2072,7 @@ def google_news_real_url(href):
             "q",
             "url"
         ):
+
             if qs.get(key):
                 return qs[key][0]
 
@@ -1564,7 +2083,9 @@ def is_allowed_domain(
     url,
     allowed_domains
 ):
+
     try:
+
         host = (
             urlparse(url)
             .netloc
@@ -1575,7 +2096,9 @@ def is_allowed_domain(
 
         return any(
             host == domain
-            or host.endswith("." + domain)
+            or host.endswith(
+                "." + domain
+            )
             for domain in allowed_domains
         )
 
@@ -1586,14 +2109,19 @@ def is_allowed_domain(
 def extract_google_news_items(
     soup,
     allowed_domains,
-    limit=20
+    limit=None
 ):
+
     items = []
 
     seen = set()
 
+    # ==============================================================
     # Google News غالبًا يضع العنوان في h3
-    for heading in soup.find_all("h3"):
+    # ==============================================================
+    for heading in soup.find_all(
+        "h3"
+    ):
 
         title = heading.get_text(
             " ",
@@ -1627,7 +2155,9 @@ def extract_google_news_items(
         ):
             continue
 
-        href = canonical_url(href)
+        href = canonical_url(
+            href
+        )
 
         if href in seen:
             continue
@@ -1638,14 +2168,25 @@ def extract_google_news_items(
             continue
 
         items.append(
-            (title, href)
+            (
+                title,
+                href
+            )
         )
 
-        if len(items) >= limit:
+        if (
+            limit is not None
+            and len(items) >= limit
+        ):
             break
 
-    # fallback للـ anchors
-    if len(items) < limit:
+    # ==============================================================
+    # fallback
+    # ==============================================================
+    if (
+        limit is None
+        or len(items) < limit
+    ):
 
         for anchor in soup.find_all(
             "a",
@@ -1670,7 +2211,9 @@ def extract_google_news_items(
             if len(text) < 15:
                 continue
 
-            href = canonical_url(href)
+            href = canonical_url(
+                href
+            )
 
             if href in seen:
                 continue
@@ -1678,10 +2221,16 @@ def extract_google_news_items(
             seen.add(href)
 
             items.append(
-                (text, href)
+                (
+                    text,
+                    href
+                )
             )
 
-            if len(items) >= limit:
+            if (
+                limit is not None
+                and len(items) >= limit
+            ):
                 break
 
     return items
@@ -1695,9 +2244,11 @@ def fetch_scrape(
     sent_hashes,
     recent_news
 ):
+
     count = 0
 
     try:
+
         r = requests.get(
             src["url"],
             headers=HEADERS,
@@ -1705,6 +2256,7 @@ def fetch_scrape(
         )
 
         if r.status_code != 200:
+
             print(
                 f"    ⚠️ HTTP "
                 f"{r.status_code}: "
@@ -1722,8 +2274,12 @@ def fetch_scrape(
             "html.parser"
         )
 
+        # ==========================================================
         # Google News
-        if src.get("google_news"):
+        # ==========================================================
+        if src.get(
+            "google_news"
+        ):
 
             items = extract_google_news_items(
                 soup,
@@ -1731,7 +2287,7 @@ def fetch_scrape(
                     "allowed_domains",
                     []
                 ),
-                limit=20
+                limit=None
             )
 
         else:
@@ -1739,7 +2295,7 @@ def fetch_scrape(
             items = extract_listing_items(
                 soup,
                 src["base"],
-                limit=20
+                limit=None
             )
 
         print(
@@ -1750,21 +2306,24 @@ def fetch_scrape(
 
         for title, link in items:
 
-            # Google News / مصادر البحث:
-            # لا نعتمد على ترتيب الصفحة لإثبات حداثة الخبر.
-            # نذهب للمقال نفسه للحصول على التاريخ.
+            # ======================================================
+            # نفتح المقال نفسه للحصول على التاريخ
+            # ======================================================
             published_at = (
-                extract_article_date(link)
+                extract_article_date(
+                    link
+                )
             )
 
             if published_at is None:
+
                 print(
                     f"    ⚠️ لا يوجد تاريخ موثوق: "
                     f"{title[:70]}"
                 )
 
-                # أمنيًا: لا ننشر خبرًا لا نستطيع
-                # إثبات حداثته من مصادر البحث.
+                # أمنيًا لا ننشر خبرًا
+                # لا نستطيع إثبات حداثته.
                 continue
 
             ok, sent_hashes, recent_news = (
@@ -1788,6 +2347,7 @@ def fetch_scrape(
                 count += 1
 
     except Exception as e:
+
         print(
             f"    ⚠️ Scrape error "
             f"{src['name']}: {e}"
@@ -1804,10 +2364,13 @@ def fetch_scrape(
 # PDF يومي
 # ══════════════════════════════════════════════════════════════════
 def download_font():
-    if not os.path.exists(FONT_PATH):
+
+    if not os.path.exists(
+        FONT_PATH
+    ):
 
         print(
-            "⬇️  جاري تحميل الخط العربي..."
+            "⬇️ جاري تحميل الخط العربي..."
         )
 
         r = requests.get(
@@ -1819,7 +2382,10 @@ def download_font():
             FONT_PATH,
             "wb"
         ) as f:
-            f.write(r.content)
+
+            f.write(
+                r.content
+            )
 
         print(
             "✅ تم تحميل الخط"
@@ -1827,10 +2393,14 @@ def download_font():
 
 
 def ar(text):
-    """تحويل النص العربي للعرض الصحيح في PDF"""
+
     try:
+
         import arabic_reshaper
-        from bidi.algorithm import get_display
+
+        from bidi.algorithm import (
+            get_display
+        )
 
         return get_display(
             arabic_reshaper.reshape(
@@ -1839,6 +2409,7 @@ def ar(text):
         )
 
     except:
+
         return str(text)
 
 
@@ -1846,6 +2417,7 @@ def generate_daily_pdf(
     news_list,
     now_egypt
 ):
+
     from fpdf import FPDF
 
     download_font()
@@ -1857,14 +2429,18 @@ def generate_daily_pdf(
     grouped = {}
 
     for item in news_list:
+
         for tab in item.get(
             "tabs",
             []
         ):
+
             grouped.setdefault(
                 tab,
                 []
-            ).append(item)
+            ).append(
+                item
+            )
 
     ordered_tabs = sorted(
         grouped.keys(),
@@ -1890,7 +2466,6 @@ def generate_daily_pdf(
 
     pdf.add_page()
 
-    # رأس الصفحة
     pdf.set_fill_color(
         26,
         60,
@@ -1937,7 +2512,7 @@ def generate_daily_pdf(
         0,
         8,
         ar(
-            f"{date_str}  |  إجمالي: "
+            f"{date_str} | إجمالي: "
             f"{len(news_list)} خبر في "
             f"{len(grouped)} تبويبات"
         ),
@@ -1977,7 +2552,7 @@ def generate_daily_pdf(
             0,
             10,
             ar(
-                f"{tab_label}  "
+                f"{tab_label} "
                 f"({len(items)} خبر)"
             ),
             ln=True,
@@ -1987,7 +2562,9 @@ def generate_daily_pdf(
 
         pdf.ln(1)
 
-        for i, item in enumerate(items):
+        for i, item in enumerate(
+            items
+        ):
 
             title = item.get(
                 "title",
@@ -2010,6 +2587,7 @@ def generate_daily_pdf(
             )
 
             try:
+
                 dt = datetime.fromisoformat(
                     created_at.replace(
                         "Z",
@@ -2018,8 +2596,8 @@ def generate_daily_pdf(
                 )
 
                 dt = (
-                    dt +
-                    timedelta(hours=2)
+                    dt
+                    + timedelta(hours=2)
                 )
 
                 time_str = dt.strftime(
@@ -2027,15 +2605,19 @@ def generate_daily_pdf(
                 )
 
             except:
+
                 time_str = ""
 
             if i % 2 == 0:
+
                 pdf.set_fill_color(
                     245,
                     249,
                     252
                 )
+
             else:
+
                 pdf.set_fill_color(
                     255,
                     255,
@@ -2060,7 +2642,7 @@ def generate_daily_pdf(
             pdf.multi_cell(
                 0,
                 7,
-                f"  {title_display}",
+                f" {title_display}",
                 align="R",
                 fill=True,
                 link=url if url else ""
@@ -2080,7 +2662,7 @@ def generate_daily_pdf(
             pdf.cell(
                 0,
                 6,
-                f"  {ar(source)} | "
+                f" {ar(source)} | "
                 f"{time_str}",
                 ln=True,
                 align="R"
@@ -2123,6 +2705,7 @@ def send_pdf_to_telegram(
     pdf_bytes,
     date_str
 ):
+
     try:
 
         filename = (
@@ -2162,6 +2745,7 @@ def send_pdf_to_telegram(
         return r.status_code == 200
 
     except Exception as e:
+
         print(
             f"Send PDF error: {e}"
         )
@@ -2196,7 +2780,7 @@ def run_pdf_report():
     )
 
     print(
-        f"  {len(news)} خبر — "
+        f" {len(news)} خبر — "
         f"جاري توليد PDF..."
     )
 
@@ -2223,7 +2807,7 @@ def run_pdf_report():
 
 
 # ══════════════════════════════════════════════════════════════════
-# الموجز اليومي
+# Gemini / الموجز اليومي
 # ══════════════════════════════════════════════════════════════════
 def ask_gemini(prompt):
 
@@ -2377,7 +2961,7 @@ def run_daily_digest():
         )
 
         print(
-            f"  🤖 Gemini: "
+            f" 🤖 Gemini: "
             f"{tab_label} "
             f"({len(headlines)} خبر)..."
         )
@@ -2407,6 +2991,7 @@ def run_daily_digest():
         )
 
         if len(msg) > 4000:
+
             msg = (
                 msg[:3990]
                 + "...\n\n"
@@ -2449,11 +3034,15 @@ def run():
     )
 
     if mode == "digest":
+
         run_daily_digest()
+
         return
 
     if mode == "pdf":
+
         run_pdf_report()
+
         return
 
     print(
@@ -2485,9 +3074,9 @@ def run():
 
     new_count = 0
 
-    # ──────────────────────────────────────────────────────────────
+    # ==============================================================
     # RSS
-    # ──────────────────────────────────────────────────────────────
+    # ==============================================================
     for src in RSS_SOURCES:
 
         print(
@@ -2505,9 +3094,9 @@ def run():
 
         new_count += count
 
-    # ──────────────────────────────────────────────────────────────
+    # ==============================================================
     # Scraping
-    # ──────────────────────────────────────────────────────────────
+    # ==============================================================
     for src in SCRAPE_SOURCES:
 
         print(
