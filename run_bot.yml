@@ -4,13 +4,10 @@ on:
   schedule:
     # أخبار كل 15 دقيقة
     - cron: '*/15 * * * *'
-
     # PDF الساعة 8 صباحاً بتوقيت مصر (6 UTC)
     - cron: '0 6 * * *'
-
     # موجز يومي الساعة 10 مساءً بتوقيت مصر (20 UTC)
     - cron: '0 20 * * *'
-
   workflow_dispatch:
     inputs:
       mode:
@@ -23,140 +20,38 @@ on:
           - digest
           - pdf
 
-
-# ═══════════════════════════════════════════════════════════════
-# منع تشغيل أكثر من نسخة من البوت في نفس الوقت
-# ═══════════════════════════════════════════════════════════════
-concurrency:
-  group: egypt-risk-radar-bot
-  cancel-in-progress: false
-
-
 jobs:
-
   run-bot:
-
     runs-on: ubuntu-latest
-
     steps:
+      - uses: actions/checkout@v3
 
-      # ═════════════════════════════════════════════════════════
-      # تحميل المشروع
-      # ═════════════════════════════════════════════════════════
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-
-      # ═════════════════════════════════════════════════════════
-      # إعداد Python
-      # ═════════════════════════════════════════════════════════
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-          cache: 'pip'
 
-
-      # ═════════════════════════════════════════════════════════
-      # تثبيت المكتبات
-      # ═════════════════════════════════════════════════════════
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install \
-            feedparser \
-            requests \
-            beautifulsoup4 \
-            fpdf2 \
-            arabic-reshaper \
-            python-bidi
+        run: pip install feedparser requests beautifulsoup4 fpdf2 arabic-reshaper python-bidi
 
-
-      # ═════════════════════════════════════════════════════════
-      # تحديد وضع التشغيل
-      # ═════════════════════════════════════════════════════════
       - name: Determine run mode
         id: mode
-        shell: bash
         run: |
-
-          echo "Event: ${{ github.event_name }}"
-          echo "Schedule: ${{ github.event.schedule }}"
-          echo "Manual mode: ${{ github.event.inputs.mode }}"
-
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-
-            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
-
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
-
-            echo "mode=pdf" >> "$GITHUB_OUTPUT"
-
+            echo "mode=pdf" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 20 * * *" ]; then
-
-            echo "mode=digest" >> "$GITHUB_OUTPUT"
-
+            echo "mode=digest" >> $GITHUB_OUTPUT
           else
-
-            echo "mode=news" >> "$GITHUB_OUTPUT"
-
+            echo "mode=news" >> $GITHUB_OUTPUT
           fi
 
-
-      # ═════════════════════════════════════════════════════════
-      # عرض وضع التشغيل
-      # ═════════════════════════════════════════════════════════
-      - name: Show run mode
-        run: |
-          echo "========================================"
-          echo " Egypt Risk Radar"
-          echo "========================================"
-          echo "Run mode: ${{ steps.mode.outputs.mode }}"
-          echo "Run ID: ${{ github.run_id }}"
-          echo "Attempt: ${{ github.run_attempt }}"
-          echo "========================================"
-
-
-      # ═════════════════════════════════════════════════════════
-      # تشغيل البوت
-      # ═════════════════════════════════════════════════════════
       - name: Run bot
         env:
-
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-
+          BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-
-          RUN_MODE: ${{ steps.mode.outputs.mode }}
-
-        run: |
-
-          echo "Starting Egypt Risk Radar Bot..."
-
-          python bot.py
-
-          echo "Bot execution finished."
-
-
-      # ═════════════════════════════════════════════════════════
-      # نتيجة التشغيل
-      # ═════════════════════════════════════════════════════════
-      - name: Run completed
-        if: success()
-        run: |
-          echo "========================================"
-          echo " Egypt Risk Radar completed successfully"
-          echo "========================================"
-
-
-      - name: Run failed
-        if: failure()
-        run: |
-          echo "========================================"
-          echo " Egypt Risk Radar FAILED"
-          echo "========================================"
-          exit 1
+          SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+          RUN_MODE:       ${{ steps.mode.outputs.mode }}
+        run: python bot.py
