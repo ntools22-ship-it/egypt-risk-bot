@@ -17,17 +17,25 @@ from bs4 import BeautifulSoup
 # ══════════════════════════════════════════════════════════════════
 # إعدادات
 # ══════════════════════════════════════════════════════════════════
-BOT_TOKEN    = os.environ.get("BOT_TOKEN", "")
-GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-CHANNEL_ID   = "@egypt_risk_radar"
 
-API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
+
+CHANNEL_ID = "@egypt_risk_radar"
+
+API_URL = (
+    f"https://api.telegram.org/bot{BOT_TOKEN}"
+    if BOT_TOKEN
+    else ""
+)
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     f"gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+    if GEMINI_KEY
+    else ""
 )
 
 FONT_PATH = "/tmp/Amiri-Regular.ttf"
@@ -37,10 +45,15 @@ FONT_URL = (
     "Amiri-Regular.ttf"
 )
 
+HTTP_TIMEOUT = 20
+TELEGRAM_TIMEOUT = 30
+MAX_TELEGRAM_MESSAGE = 4000
+
 
 # ══════════════════════════════════════════════════════════════════
 # الأخبار التي لا نريد نشرها
 # ══════════════════════════════════════════════════════════════════
+
 EXCLUDE_KW = [
     "مواعيد قطارات",
     "مواعيد القطار",
@@ -68,11 +81,6 @@ EXCLUDE_KW = [
 ]
 
 
-# ══════════════════════════════════════════════════════════════════
-# تحديثات حقيقية
-# ملاحظة:
-# لم نعد نستخدمها للسماح بتكرار نفس الخبر.
-# ══════════════════════════════════════════════════════════════════
 UPDATE_KW = [
     "ارتفاع عدد",
     "حصيلة",
@@ -121,6 +129,7 @@ HEADERS = {
 # ══════════════════════════════════════════════════════════════════
 # المصادر — RSS
 # ══════════════════════════════════════════════════════════════════
+
 RSS_SOURCES = [
 
     {
@@ -200,8 +209,9 @@ RSS_SOURCES = [
     },
 
     # ══════════════════════════════════════════════════════════════
-    # البورصة نيوز - أقسام قطاعية
+    # البورصة نيوز - قطاعات
     # ══════════════════════════════════════════════════════════════
+
     {
         "id": "borsaa_agri",
         "name": "البورصة نيوز - زراعة",
@@ -236,8 +246,25 @@ RSS_SOURCES = [
     },
 
     # ══════════════════════════════════════════════════════════════
+    # البورصة نيوز - بنوك
+    # تم استبدال الـ General Feed بهذا المصدر
+    # ══════════════════════════════════════════════════════════════
+
+    {
+        "id": "borsaa_banks",
+        "name": "البورصة نيوز - بنوك",
+        "url": (
+            "https://www.alborsaanews.com/category/"
+            "%d8%a7%d9%84%d8%a8%d9%86%d9%88%d9%83/feed/"
+        ),
+        "tab": "banks",
+        "exclude": []
+    },
+
+    # ══════════════════════════════════════════════════════════════
     # أموال الغد
     # ══════════════════════════════════════════════════════════════
+
     {
         "id": "amwal_energy",
         "name": "أموال الغد - طاقة",
@@ -274,6 +301,7 @@ RSS_SOURCES = [
     # ══════════════════════════════════════════════════════════════
     # المصادر العامة → عاجل
     # ══════════════════════════════════════════════════════════════
+
     {
         "id": "hapi_all",
         "name": "حابي",
@@ -291,14 +319,6 @@ RSS_SOURCES = [
     },
 
     {
-        "id": "borsaa_all",
-        "name": "البورصة نيوز",
-        "url": "https://www.alborsaanews.com/feed/",
-        "tab": None,
-        "exclude": []
-    },
-
-    {
         "id": "masrafeyoun_all",
         "name": "المصرفيون",
         "url": "https://masrafeyoun.ebi.gov.eg/feed/",
@@ -311,6 +331,7 @@ RSS_SOURCES = [
 # ══════════════════════════════════════════════════════════════════
 # المصادر — Scraping
 # ══════════════════════════════════════════════════════════════════
+
 SCRAPE_SOURCES = [
 
     {
@@ -349,9 +370,7 @@ SCRAPE_SOURCES = [
         "exclude": []
     },
 
-    # ══════════════════════════════════════════════════════════════
-    # استبدال مصراوي بحريق مصنع → صدى البلد
-    # ══════════════════════════════════════════════════════════════
+    # صدى البلد — حريق مصنع
     {
         "id": "elbalad_factory_fire",
         "name": "صدى البلد - حريق مصنع",
@@ -384,7 +403,7 @@ SCRAPE_SOURCES = [
         ]
     },
 
-    # حابي → أهم الأخبار → عاجل
+    # حابي → أهم الأخبار
     {
         "id": "hapi_important_breaking",
         "name": "حابي - أهم الأخبار",
@@ -397,9 +416,7 @@ SCRAPE_SOURCES = [
         "exclude": []
     },
 
-    # ══════════════════════════════════════════════════════════════
-    # مباشر بنوك مصر → أخبار البنوك
-    # ══════════════════════════════════════════════════════════════
+    # مباشر بنوك مصر
     {
         "id": "egyptbanks_banks",
         "name": "مباشر بنوك مصر",
@@ -408,27 +425,13 @@ SCRAPE_SOURCES = [
         "base": "https://egyptbanks.info",
         "exclude": []
     },
-
-    # ══════════════════════════════════════════════════════════════
-    # البورصة نيوز → أخبار البنوك
-    # ══════════════════════════════════════════════════════════════
-    {
-        "id": "borsaa_banks",
-        "name": "البورصة نيوز - بنوك",
-        "url": (
-            "https://www.alborsaanews.com/category/"
-            "%d8%a7%d9%84%d8%a8%d9%86%d9%88%d9%83"
-        ),
-        "tab": "banks",
-        "base": "https://www.alborsaanews.com",
-        "exclude": []
-    },
 ]
 
 
 # ══════════════════════════════════════════════════════════════════
 # Labels
 # ══════════════════════════════════════════════════════════════════
+
 TAB_LABELS = {
     "breaking":          "⚡ عاجل",
     "banks":             "🏦 أخبار البنوك",
@@ -446,9 +449,6 @@ TAB_LABELS = {
 }
 
 
-# ══════════════════════════════════════════════════════════════════
-# الأولويات للموجز و PDF
-# ══════════════════════════════════════════════════════════════════
 DIGEST_PRIORITY = [
     "warning",
     "credit",
@@ -467,9 +467,334 @@ DIGEST_PRIORITY = [
 
 
 # ══════════════════════════════════════════════════════════════════
+# Telegram
+# ══════════════════════════════════════════════════════════════════
+
+def escape_markdown(text):
+    """
+    حماية النصوص الديناميكية من أخطاء Telegram Markdown.
+    """
+
+    if text is None:
+        return ""
+
+    text = str(text)
+
+    return (
+        text
+        .replace("\\", "\\\\")
+        .replace("_", "\\_")
+        .replace("*", "\\*")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("`", "\\`")
+    )
+
+
+def split_telegram_message(text, max_length=MAX_TELEGRAM_MESSAGE):
+    """
+    تقسيم الرسائل الطويلة حتى لا يرفضها Telegram.
+    """
+
+    if not text:
+        return []
+
+    text = str(text)
+
+    if len(text) <= max_length:
+        return [text]
+
+    chunks = []
+
+    while len(text) > max_length:
+
+        cut = text.rfind(
+            "\n",
+            0,
+            max_length
+        )
+
+        if cut < max_length * 0.5:
+            cut = max_length
+
+        chunks.append(
+            text[:cut]
+        )
+
+        text = text[cut:].lstrip()
+
+    if text:
+        chunks.append(text)
+
+    return chunks
+
+
+def send(text):
+    """
+    إرسال رسالة إلى Telegram.
+
+    إذا فشل Markdown بسبب نص صادر من مصدر خارجي،
+    تتم إعادة المحاولة بدون parse_mode بدل فقد الرسالة.
+    """
+
+    if not BOT_TOKEN:
+        print("    ❌ BOT_TOKEN غير موجود")
+        return False
+
+    if not CHANNEL_ID:
+        print("    ❌ CHANNEL_ID غير موجود")
+        return False
+
+    if not text:
+        print("    ❌ محاولة إرسال رسالة فارغة")
+        return False
+
+    chunks = split_telegram_message(text)
+
+    all_ok = True
+
+    for index, chunk in enumerate(chunks, start=1):
+
+        payload = {
+            "chat_id": CHANNEL_ID,
+            "text": chunk,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True
+        }
+
+        try:
+
+            r = requests.post(
+                f"{API_URL}/sendMessage",
+                json=payload,
+                timeout=TELEGRAM_TIMEOUT
+            )
+
+            if r.status_code == 200:
+
+                if len(chunks) > 1:
+                    print(
+                        f"    📤 Telegram "
+                        f"{index}/{len(chunks)} تم"
+                    )
+                else:
+                    print(
+                        "    📤 تم الإرسال إلى Telegram"
+                    )
+
+                continue
+
+            print(
+                f"    ⚠️ Telegram Markdown HTTP "
+                f"{r.status_code}: "
+                f"{r.text[:400]}"
+            )
+
+            # إعادة محاولة بدون Markdown
+            fallback_payload = {
+                "chat_id": CHANNEL_ID,
+                "text": chunk,
+                "disable_web_page_preview": True
+            }
+
+            r2 = requests.post(
+                f"{API_URL}/sendMessage",
+                json=fallback_payload,
+                timeout=TELEGRAM_TIMEOUT
+            )
+
+            if r2.status_code == 200:
+
+                print(
+                    "    📤 تم الإرسال بدون Markdown"
+                )
+
+                continue
+
+            print(
+                f"    ❌ Telegram fallback HTTP "
+                f"{r2.status_code}: "
+                f"{r2.text[:400]}"
+            )
+
+            all_ok = False
+
+        except requests.RequestException as e:
+
+            print(
+                f"    ❌ Telegram connection error: {e}"
+            )
+
+            all_ok = False
+
+        except Exception as e:
+
+            print(
+                f"    ❌ Telegram send error: {e}"
+            )
+
+            all_ok = False
+
+        if index < len(chunks):
+            time.sleep(1)
+
+    return all_ok
+
+
+def telegram_health_check():
+    """
+    التأكد أن BOT_TOKEN صالح وأن Telegram API يستجيب.
+
+    لا يرسل أي رسالة للمستخدم.
+    """
+
+    if not BOT_TOKEN:
+        print("❌ Telegram: BOT_TOKEN غير موجود")
+        return False
+
+    if not CHANNEL_ID:
+        print("❌ Telegram: CHANNEL_ID غير موجود")
+        return False
+
+    try:
+
+        r = requests.get(
+            f"{API_URL}/getMe",
+            timeout=15
+        )
+
+        if r.status_code != 200:
+
+            print(
+                f"❌ Telegram getMe HTTP "
+                f"{r.status_code}: {r.text[:400]}"
+            )
+
+            return False
+
+        data = r.json()
+
+        if not data.get("ok"):
+
+            print(
+                f"❌ Telegram getMe: "
+                f"{str(data)[:400]}"
+            )
+
+            return False
+
+        bot = data.get(
+            "result",
+            {}
+        )
+
+        print(
+            f"✅ Telegram Bot: "
+            f"@{bot.get('username', 'unknown')}"
+        )
+
+        # فحص القناة
+        r2 = requests.get(
+            f"{API_URL}/getChat",
+            params={
+                "chat_id": CHANNEL_ID
+            },
+            timeout=15
+        )
+
+        if r2.status_code != 200:
+
+            print(
+                f"❌ Telegram Channel HTTP "
+                f"{r2.status_code}: "
+                f"{r2.text[:500]}"
+            )
+
+            print(
+                "   تأكد أن البوت موجود في القناة "
+                "ولديه صلاحية النشر."
+            )
+
+            return False
+
+        data2 = r2.json()
+
+        if not data2.get("ok"):
+
+            print(
+                f"❌ Telegram Channel error: "
+                f"{str(data2)[:500]}"
+            )
+
+            return False
+
+        chat = data2.get(
+            "result",
+            {}
+        )
+
+        print(
+            f"✅ Telegram Channel: "
+            f"{chat.get('title', CHANNEL_ID)}"
+        )
+
+        return True
+
+    except Exception as e:
+
+        print(
+            f"❌ Telegram health check error: {e}"
+        )
+
+        return False
+
+
+# ══════════════════════════════════════════════════════════════════
+# تنسيق الرسائل
+# ══════════════════════════════════════════════════════════════════
+
+def format_msg(
+    title,
+    url,
+    source_name,
+    tabs
+):
+
+    labels = " | ".join(
+        TAB_LABELS.get(
+            tab,
+            tab
+        )
+        for tab in tabs
+    )
+
+    safe_title = escape_markdown(
+        title
+    )
+
+    safe_source = escape_markdown(
+        source_name
+    )
+
+    safe_url = escape_markdown(
+        url
+    )
+
+    return (
+        f"{labels}\n\n"
+        f"*{safe_title}*\n\n"
+        f"📰 المصدر: {safe_source}\n"
+        f"🔗 {safe_url}\n\n"
+        f"🛡 @egypt\\_risk\\_radar"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
 # Supabase
 # ══════════════════════════════════════════════════════════════════
+
 def sb_headers():
+
     return {
         "apikey": SUPABASE_KEY,
         "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -477,35 +802,57 @@ def sb_headers():
     }
 
 
-def supabase_get_hashes():
-    """
-    الاحتفاظ بالوظيفة الأصلية للتوافق مع النظام.
+def supabase_ready():
 
-    لا نعتمد عليها وحدها في منع التكرار،
-    لأن hash القديم كان مبنيًا على العنوان فقط
-    وبالتالي لا يميز بين المصادر المختلفة.
-    """
+    return bool(
+        SUPABASE_URL
+        and SUPABASE_KEY
+    )
+
+
+def supabase_get_hashes():
+
+    if not supabase_ready():
+
+        print(
+            "⚠️ Supabase غير مُعد — تم تجاوز تحميل hash"
+        )
+
+        return set()
+
     try:
+
         since = (
             datetime.now(timezone.utc)
             - timedelta(days=7)
         ).isoformat()
 
         r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news"
-            f"?select=hash&created_at=gte.{since}",
+            f"{SUPABASE_URL}/rest/v1/news",
+            params={
+                "select": "hash",
+                "created_at": f"gte.{since}"
+            },
             headers=sb_headers(),
-            timeout=10
+            timeout=15
         )
 
         if r.status_code == 200:
+
             return {
                 item["hash"]
                 for item in r.json()
                 if item.get("hash")
             }
 
+        print(
+            f"Supabase get_hashes HTTP "
+            f"{r.status_code}: "
+            f"{r.text[:300]}"
+        )
+
     except Exception as e:
+
         print(
             f"Supabase get_hashes error: {e}"
         )
@@ -514,13 +861,15 @@ def supabase_get_hashes():
 
 
 def supabase_get_recent_news_for_dedupe():
-    """
-    تحميل الأخبار السابقة المستخدمة لمنع التكرار.
 
-    يتم جلبها على صفحات حتى لا نعتمد على حد 1000 سجل فقط.
-    لا نحدد فترة 7 أيام؛ الهدف منع إعادة نشر نفس الخبر
-    من نفس المصدر حتى لو كان موجودًا منذ فترة أطول.
-    """
+    if not supabase_ready():
+
+        print(
+            "⚠️ Supabase غير مُعد — "
+            "ذاكرة منع التكرار ستبدأ فارغة"
+        )
+
+        return []
 
     all_items = []
     offset = 0
@@ -548,7 +897,8 @@ def supabase_get_recent_news_for_dedupe():
 
                 print(
                     f"Supabase recent news HTTP "
-                    f"{r.status_code}: {r.text[:300]}"
+                    f"{r.status_code}: "
+                    f"{r.text[:300]}"
                 )
 
                 break
@@ -565,12 +915,13 @@ def supabase_get_recent_news_for_dedupe():
 
             offset += page_size
 
-            # حماية إضافية من تحميل كمية ضخمة بلا داعٍ
             if len(all_items) >= 20000:
+
                 print(
-                    "   ⚠️ تم الوصول إلى حد "
+                    "⚠️ تم الوصول إلى حد "
                     "20,000 خبر في ذاكرة منع التكرار"
                 )
+
                 break
 
         return all_items
@@ -591,6 +942,16 @@ def supabase_save_news(
     tabs,
     h
 ):
+
+    if not supabase_ready():
+
+        print(
+            "    ⚠️ Supabase غير مُعد — "
+            "لم يتم حفظ الخبر"
+        )
+
+        return False
+
     try:
 
         r = requests.post(
@@ -606,7 +967,7 @@ def supabase_save_news(
                 "tabs": tabs,
                 "hash": h
             },
-            timeout=10
+            timeout=15
         )
 
         if r.status_code not in (
@@ -617,7 +978,8 @@ def supabase_save_news(
 
             print(
                 f"Supabase save HTTP "
-                f"{r.status_code}: {r.text[:300]}"
+                f"{r.status_code}: "
+                f"{r.text[:300]}"
             )
 
             return False
@@ -634,6 +996,10 @@ def supabase_save_news(
 
 
 def supabase_get_last_24h():
+
+    if not supabase_ready():
+        return []
+
     try:
 
         since = (
@@ -642,16 +1008,23 @@ def supabase_get_last_24h():
         ).isoformat()
 
         r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news"
-            f"?select=title,tabs"
-            f"&created_at=gte.{since}"
-            f"&order=created_at.asc",
+            f"{SUPABASE_URL}/rest/v1/news",
+            params={
+                "select": "title,tabs",
+                "created_at": f"gte.{since}",
+                "order": "created_at.asc"
+            },
             headers=sb_headers(),
             timeout=15
         )
 
         if r.status_code == 200:
             return r.json()
+
+        print(
+            f"Supabase last24h HTTP "
+            f"{r.status_code}: {r.text[:300]}"
+        )
 
     except Exception as e:
 
@@ -663,6 +1036,10 @@ def supabase_get_last_24h():
 
 
 def supabase_get_news_for_pdf():
+
+    if not supabase_ready():
+        return []
+
     try:
 
         since = (
@@ -671,16 +1048,25 @@ def supabase_get_news_for_pdf():
         ).isoformat()
 
         r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news"
-            f"?select=title,url,source_name,tabs,created_at"
-            f"&created_at=gte.{since}"
-            f"&order=created_at.asc",
+            f"{SUPABASE_URL}/rest/v1/news",
+            params={
+                "select": (
+                    "title,url,source_name,tabs,created_at"
+                ),
+                "created_at": f"gte.{since}",
+                "order": "created_at.asc"
+            },
             headers=sb_headers(),
-            timeout=15
+            timeout=20
         )
 
         if r.status_code == 200:
             return r.json()
+
+        print(
+            f"Supabase PDF HTTP "
+            f"{r.status_code}: {r.text[:300]}"
+        )
 
     except Exception as e:
 
@@ -698,12 +1084,18 @@ def supabase_save_digest(
     news_count,
     digest_date
 ):
+
+    if not supabase_ready():
+        return False
+
     try:
 
         requests.delete(
-            f"{SUPABASE_URL}/rest/v1/digest"
-            f"?tab_key=eq.{tab_key}"
-            f"&digest_date=eq.{digest_date}",
+            f"{SUPABASE_URL}/rest/v1/digest",
+            params={
+                "tab_key": f"eq.{tab_key}",
+                "digest_date": f"eq.{digest_date}"
+            },
             headers=sb_headers(),
             timeout=10
         )
@@ -739,6 +1131,7 @@ def supabase_save_digest(
 # ══════════════════════════════════════════════════════════════════
 # تنظيف ومقارنة الأخبار
 # ══════════════════════════════════════════════════════════════════
+
 def normalize_arabic_text(text):
 
     if not text:
@@ -746,7 +1139,6 @@ def normalize_arabic_text(text):
 
     text = str(text).lower().strip()
 
-    # إزالة التشكيل
     text = re.sub(
         r"[\u064B-\u065F\u0670]",
         "",
@@ -881,13 +1273,10 @@ def titles_are_probable_duplicate(
         len(common) / smaller
     )
 
-    if (
+    return (
         overlap >= 0.80
         and ratio >= 0.58
-    ):
-        return True
-
-    return False
+    )
 
 
 def is_excluded_title(
@@ -913,6 +1302,7 @@ def is_excluded_title(
         if normalize_arabic_text(
             kw
         ) in text:
+
             return True
 
     return False
@@ -931,6 +1321,7 @@ def is_recent_datetime(
     )
 
     if dt.tzinfo is None:
+
         dt = dt.replace(
             tzinfo=timezone.utc
         )
@@ -940,6 +1331,7 @@ def is_recent_datetime(
     if age < timedelta(
         minutes=-10
     ):
+
         return False
 
     return age <= timedelta(
@@ -960,6 +1352,7 @@ def parse_any_datetime(value):
         dt = value
 
         if dt.tzinfo is None:
+
             dt = dt.replace(
                 tzinfo=timezone.utc
             )
@@ -980,6 +1373,7 @@ def parse_any_datetime(value):
         )
 
         if dt.tzinfo is None:
+
             dt = dt.replace(
                 tzinfo=timezone.utc
             )
@@ -1000,6 +1394,7 @@ def parse_any_datetime(value):
         )
 
         if dt.tzinfo is None:
+
             dt = dt.replace(
                 tzinfo=timezone.utc
             )
@@ -1039,6 +1434,7 @@ def parse_any_datetime(value):
 # ══════════════════════════════════════════════════════════════════
 # تاريخ المقال
 # ══════════════════════════════════════════════════════════════════
+
 def extract_article_date(url):
 
     try:
@@ -1065,10 +1461,15 @@ def extract_article_date(url):
 
             try:
 
+                raw = script.get_text(
+                    strip=True
+                )
+
+                if not raw:
+                    continue
+
                 data = json.loads(
-                    script.get_text(
-                        strip=True
-                    )
+                    raw
                 )
 
                 objects = []
@@ -1109,12 +1510,8 @@ def extract_article_date(url):
                         continue
 
                     published = (
-                        obj.get(
-                            "datePublished"
-                        )
-                        or obj.get(
-                            "datepublished"
-                        )
+                        obj.get("datePublished")
+                        or obj.get("datepublished")
                     )
 
                     dt = parse_any_datetime(
@@ -1153,9 +1550,7 @@ def extract_article_date(url):
             ):
 
                 dt = parse_any_datetime(
-                    tag.get(
-                        "content"
-                    )
+                    tag.get("content")
                 )
 
                 if dt:
@@ -1182,7 +1577,7 @@ def extract_article_date(url):
             if dt:
                 return dt
 
-        # dateModified
+        # dateModified fallback
         for script in soup.find_all(
             "script",
             type="application/ld+json"
@@ -1190,10 +1585,15 @@ def extract_article_date(url):
 
             try:
 
+                raw = script.get_text(
+                    strip=True
+                )
+
+                if not raw:
+                    continue
+
                 data = json.loads(
-                    script.get_text(
-                        strip=True
-                    )
+                    raw
                 )
 
                 objects = []
@@ -1260,17 +1660,21 @@ def extract_article_date(url):
 # ══════════════════════════════════════════════════════════════════
 # أدوات مساعدة
 # ══════════════════════════════════════════════════════════════════
+
 def is_arabic(text):
+
+    if not text:
+        return False
 
     count = sum(
         1
-        for c in text
+        for c in str(text)
         if "\u0600" <= c <= "\u06ff"
     )
 
     return (
         count / max(
-            len(text),
+            len(str(text)),
             1
         )
         > 0.3
@@ -1280,6 +1684,7 @@ def is_arabic(text):
 # ══════════════════════════════════════════════════════════════════
 # التصنيف حسب المصدر فقط
 # ══════════════════════════════════════════════════════════════════
+
 def get_tabs(
     title,
     summary,
@@ -1289,13 +1694,13 @@ def get_tabs(
     if primary_tab:
         return [primary_tab]
 
-    # أي مصدر عام = عاجل
     return ["breaking"]
 
 
 # ══════════════════════════════════════════════════════════════════
 # Hash
 # ══════════════════════════════════════════════════════════════════
+
 def make_hash(title):
 
     normalized = normalize_arabic_text(
@@ -1312,12 +1717,13 @@ def make_hash(title):
 # ══════════════════════════════════════════════════════════════════
 # الرابط القياسي
 # ══════════════════════════════════════════════════════════════════
+
 def canonical_url(url):
 
     if not url:
         return ""
 
-    url = url.strip()
+    url = str(url).strip()
 
     parsed = urlparse(
         url
@@ -1385,18 +1791,8 @@ def canonical_url(url):
 # ══════════════════════════════════════════════════════════════════
 # مصدر الخبر الحقيقي
 # ══════════════════════════════════════════════════════════════════
+
 def source_domain(url):
-
-    """
-    تحديد الموقع الأصلي للخبر.
-
-    مثال:
-    https://hapijournal.com/article/123
-    → hapijournal.com
-
-    وهذا يجعل حابي - تمويل وحابي العام
-    يعتبران نفس الموقع عند منع التكرار.
-    """
 
     if not url:
         return ""
@@ -1404,9 +1800,7 @@ def source_domain(url):
     try:
 
         host = (
-            urlparse(
-                url
-            )
+            urlparse(url)
             .netloc
             .lower()
             .split("@")[-1]
@@ -1427,14 +1821,6 @@ def source_identity(
     article_url
 ):
 
-    """
-    الهوية المستخدمة لمنع التكرار.
-
-    نعتمد على دومين الخبر عندما يكون متاحًا،
-    حتى لا تتكرر نفس المقالة من قسمين مختلفين
-    داخل الموقع نفسه.
-    """
-
     domain = source_domain(
         article_url
     )
@@ -1448,8 +1834,9 @@ def source_identity(
 
 
 # ══════════════════════════════════════════════════════════════════
-# منع التكرار — حسب نفس المصدر فقط
+# منع التكرار — نفس المصدر فقط
 # ══════════════════════════════════════════════════════════════════
+
 def is_duplicate_against_recent(
     title,
     url,
@@ -1494,13 +1881,7 @@ def is_duplicate_against_recent(
             old_url
         )
 
-        # ==========================================================
-        # مهم جدًا:
-        # لا نقارن أخبار مصادر مختلفة.
-        #
-        # نفس الخبر في حابي + البورصة نيوز
-        # مسموح به.
-        # ==========================================================
+        # مصادر مختلفة = مسموح
         if (
             current_source
             and old_source
@@ -1508,8 +1889,6 @@ def is_duplicate_against_recent(
         ):
             continue
 
-        # إذا لم نستطع تحديد المصدر،
-        # نستخدم اسم المصدر كبديل.
         if not current_source or not old_source:
 
             if normalize_arabic_text(
@@ -1519,9 +1898,7 @@ def is_duplicate_against_recent(
             ):
                 continue
 
-        # ==========================================================
-        # نفس الرابط من نفس المصدر
-        # ==========================================================
+        # نفس الرابط
         if (
             current_url
             and old_url
@@ -1530,9 +1907,7 @@ def is_duplicate_against_recent(
 
             return True, "نفس الرابط من نفس المصدر"
 
-        # ==========================================================
-        # نفس العنوان من نفس المصدر
-        # ==========================================================
+        # نفس العنوان
         old_norm = normalize_arabic_text(
             old_title
         )
@@ -1545,12 +1920,7 @@ def is_duplicate_against_recent(
 
             return True, "نفس العنوان من نفس المصدر"
 
-        # ==========================================================
-        # تشابه قوي — من نفس المصدر فقط
-        #
-        # لا نستخدم UPDATE_KW هنا.
-        # لأن الهدف منع إعادة نشر نفس الخبر.
-        # ==========================================================
+        # تشابه قوي
         if titles_are_probable_duplicate(
             title,
             old_title
@@ -1564,6 +1934,7 @@ def is_duplicate_against_recent(
 # ══════════════════════════════════════════════════════════════════
 # معالجة الخبر
 # ══════════════════════════════════════════════════════════════════
+
 def process_item(
     title,
     url,
@@ -1577,19 +1948,19 @@ def process_item(
 ):
 
     if not title or not url:
+
         return (
             False,
             sent_hashes,
             recent_news
         )
 
-    title = title.strip()
+    title = str(title).strip()
 
     url = canonical_url(
         url
     )
 
-    # عربي
     if not is_arabic(
         title
     ):
@@ -1600,7 +1971,6 @@ def process_item(
             recent_news
         )
 
-    # استبعاد
     if is_excluded_title(
         title,
         exclude
@@ -1617,7 +1987,6 @@ def process_item(
             recent_news
         )
 
-    # التاريخ
     if published_at is not None:
 
         if not is_recent_datetime(
@@ -1636,9 +2005,6 @@ def process_item(
                 recent_news
             )
 
-    # ==========================================================
-    # التكرار حسب المصدر
-    # ==========================================================
     duplicate, reason = (
         is_duplicate_against_recent(
             title,
@@ -1662,9 +2028,6 @@ def process_item(
             recent_news
         )
 
-    # ==========================================================
-    # التصنيف حسب المصدر
-    # ==========================================================
     tabs = get_tabs(
         title,
         summary,
@@ -1686,16 +2049,12 @@ def process_item(
         tabs
     )
 
-    # ==========================================================
-    # إرسال Telegram
-    # ==========================================================
     if send(msg):
 
         h = make_hash(
             title
         )
 
-        # حفظ في Supabase
         saved = supabase_save_news(
             title,
             url,
@@ -1711,9 +2070,6 @@ def process_item(
                 "لكن فشل حفظه في Supabase"
             )
 
-        # ======================================================
-        # إضافة الخبر للذاكرة الحالية حتى لو فشل Supabase
-        # ======================================================
         recent_news.insert(
             0,
             {
@@ -1726,7 +2082,6 @@ def process_item(
             }
         )
 
-        # hash للذاكرة المحلية فقط
         sent_hashes.add(
             h
         )
@@ -1744,7 +2099,7 @@ def process_item(
         )
 
     print(
-        f"    ❌ فشل: "
+        f"    ❌ فشل إرسال: "
         f"{title[:60]}"
     )
 
@@ -1758,6 +2113,7 @@ def process_item(
 # ══════════════════════════════════════════════════════════════════
 # RSS
 # ══════════════════════════════════════════════════════════════════
+
 def get_feed_entry_date(entry):
 
     for field in (
@@ -1817,13 +2173,52 @@ def fetch_rss(
 
     try:
 
-        feed = feedparser.parse(
-            src["url"]
+        response = requests.get(
+            src["url"],
+            headers=HEADERS,
+            timeout=HTTP_TIMEOUT
         )
 
-        # رفعنا 15 إلى 100 لتقليل احتمالية فقد الأخبار
-        # إذا نشر المصدر عددًا كبيرًا بين تشغيلين.
-        for entry in feed.entries[:100]:
+        if response.status_code != 200:
+
+            print(
+                f"    ⚠️ RSS HTTP "
+                f"{response.status_code}: "
+                f"{src['name']}"
+            )
+
+            return (
+                0,
+                sent_hashes,
+                recent_news
+            )
+
+        feed = feedparser.parse(
+            response.content
+        )
+
+        if getattr(
+            feed,
+            "bozo",
+            False
+        ):
+
+            print(
+                f"    ⚠️ RSS warning: "
+                f"{src['name']}"
+            )
+
+        entries = getattr(
+            feed,
+            "entries",
+            []
+        )
+
+        print(
+            f"    📥 {len(entries)} خبر في RSS"
+        )
+
+        for entry in entries[:100]:
 
             published_at = (
                 get_feed_entry_date(
@@ -1860,6 +2255,13 @@ def fetch_rss(
             if ok:
                 count += 1
 
+    except requests.RequestException as e:
+
+        print(
+            f"    ⚠️ RSS connection error "
+            f"{src['name']}: {e}"
+        )
+
     except Exception as e:
 
         print(
@@ -1877,6 +2279,7 @@ def fetch_rss(
 # ══════════════════════════════════════════════════════════════════
 # Scraping
 # ══════════════════════════════════════════════════════════════════
+
 def absolute_url(
     base,
     href
@@ -1909,7 +2312,6 @@ def extract_listing_items(
 
     seen_urls = set()
 
-    # article
     for article in soup.find_all(
         "article"
     ):
@@ -1979,7 +2381,6 @@ def extract_listing_items(
         if len(items) >= limit:
             break
 
-    # fallback
     if len(items) < limit:
 
         for heading in soup.find_all(
@@ -2044,6 +2445,7 @@ def extract_listing_items(
 # ══════════════════════════════════════════════════════════════════
 # Google News
 # ══════════════════════════════════════════════════════════════════
+
 def google_news_real_url(
     href
 ):
@@ -2183,7 +2585,6 @@ def extract_google_news_items(
         if len(items) >= limit:
             break
 
-    # fallback
     if len(items) < limit:
 
         for anchor in soup.find_all(
@@ -2248,7 +2649,7 @@ def fetch_scrape(
         r = requests.get(
             src["url"],
             headers=HEADERS,
-            timeout=15
+            timeout=HTTP_TIMEOUT
         )
 
         if r.status_code != 200:
@@ -2338,6 +2739,13 @@ def fetch_scrape(
             if ok:
                 count += 1
 
+    except requests.RequestException as e:
+
+        print(
+            f"    ⚠️ Scrape connection error "
+            f"{src['name']}: {e}"
+        )
+
     except Exception as e:
 
         print(
@@ -2355,20 +2763,33 @@ def fetch_scrape(
 # ══════════════════════════════════════════════════════════════════
 # PDF
 # ══════════════════════════════════════════════════════════════════
+
 def download_font():
 
-    if not os.path.exists(
+    if os.path.exists(
         FONT_PATH
     ):
+        return True
 
-        print(
-            "⬇️ جاري تحميل الخط العربي..."
-        )
+    print(
+        "⬇️ جاري تحميل الخط العربي..."
+    )
+
+    try:
 
         r = requests.get(
             FONT_URL,
             timeout=30
         )
+
+        if r.status_code != 200:
+
+            print(
+                f"❌ فشل تحميل الخط: "
+                f"HTTP {r.status_code}"
+            )
+
+            return False
 
         with open(
             FONT_PATH,
@@ -2382,6 +2803,16 @@ def download_font():
         print(
             "✅ تم تحميل الخط"
         )
+
+        return True
+
+    except Exception as e:
+
+        print(
+            f"❌ Font download error: {e}"
+        )
+
+        return False
 
 
 def ar(text):
@@ -2400,7 +2831,7 @@ def ar(text):
             )
         )
 
-    except:
+    except Exception:
 
         return str(text)
 
@@ -2412,7 +2843,10 @@ def generate_daily_pdf(
 
     from fpdf import FPDF
 
-    download_font()
+    if not download_font():
+        raise RuntimeError(
+            "تعذر تحميل خط Amiri"
+        )
 
     date_str = now_egypt.strftime(
         "%d/%m/%Y"
@@ -2606,7 +3040,7 @@ def generate_daily_pdf(
                     "%H:%M"
                 )
 
-            except:
+            except Exception:
 
                 time_str = ""
 
@@ -2714,6 +3148,12 @@ def send_pdf_to_telegram(
     date_str
 ):
 
+    if not BOT_TOKEN:
+        print(
+            "❌ PDF: BOT_TOKEN غير موجود"
+        )
+        return False
+
     try:
 
         filename = (
@@ -2752,7 +3192,16 @@ def send_pdf_to_telegram(
             timeout=60
         )
 
-        return r.status_code == 200
+        if r.status_code == 200:
+            return True
+
+        print(
+            f"❌ PDF Telegram HTTP "
+            f"{r.status_code}: "
+            f"{r.text[:500]}"
+        )
+
+        return False
 
     except Exception as e:
 
@@ -2800,10 +3249,20 @@ def run_pdf_report():
         f"جاري توليد PDF..."
     )
 
-    pdf_bytes = generate_daily_pdf(
-        news,
-        now_egypt
-    )
+    try:
+
+        pdf_bytes = generate_daily_pdf(
+            news,
+            now_egypt
+        )
+
+    except Exception as e:
+
+        print(
+            f"❌ PDF generation error: {e}"
+        )
+
+        return
 
     if send_pdf_to_telegram(
         pdf_bytes,
@@ -2825,7 +3284,14 @@ def run_pdf_report():
 # ══════════════════════════════════════════════════════════════════
 # Gemini
 # ══════════════════════════════════════════════════════════════════
+
 def ask_gemini(prompt):
+
+    if not GEMINI_KEY:
+        print(
+            "❌ GEMINI_API_KEY غير موجود"
+        )
+        return None
 
     try:
 
@@ -2845,19 +3311,52 @@ def ask_gemini(prompt):
             timeout=60
         )
 
+        if r.status_code != 200:
+
+            print(
+                f"Gemini HTTP "
+                f"{r.status_code}: "
+                f"{r.text[:500]}"
+            )
+
+            return None
+
         data = r.json()
 
-        return (
-            data[
-                "candidates"
-            ][0][
-                "content"
-            ][
-                "parts"
-            ][0][
-                "text"
-            ]
+        candidates = data.get(
+            "candidates",
+            []
         )
+
+        if not candidates:
+            return None
+
+        content = candidates[0].get(
+            "content",
+            {}
+        )
+
+        parts = content.get(
+            "parts",
+            []
+        )
+
+        if not parts:
+            return None
+
+        text = parts[0].get(
+            "text"
+        )
+
+        return text.strip() if text else None
+
+    except requests.RequestException as e:
+
+        print(
+            f"Gemini connection error: {e}"
+        )
+
+        return None
 
     except Exception as e:
 
@@ -2876,15 +3375,19 @@ def group_by_tab(
 
     for item in news_list:
 
-        for tab in item[
-            "tabs"
-        ]:
+        for tab in item.get(
+            "tabs",
+            []
+        ):
 
             grouped.setdefault(
                 tab,
                 []
             ).append(
-                item["title"]
+                item.get(
+                    "title",
+                    ""
+                )
             )
 
     return grouped
@@ -3020,14 +3523,6 @@ def run_daily_digest():
             f"🛡 @egypt\\_risk\\_radar"
         )
 
-        if len(msg) > 4000:
-
-            msg = (
-                msg[:3990]
-                + "...\n\n"
-                + "🛡 @egypt\\_risk\\_radar"
-            )
-
         send(
             msg
         )
@@ -3058,16 +3553,106 @@ def run_daily_digest():
 
 
 # ══════════════════════════════════════════════════════════════════
+# فحص الإعدادات
+# ══════════════════════════════════════════════════════════════════
+
+def configuration_check():
+
+    print(
+        "\n🔐 فحص إعدادات التشغيل..."
+    )
+
+    print(
+        f"   BOT_TOKEN: "
+        f"{'OK' if BOT_TOKEN else 'MISSING'}"
+    )
+
+    print(
+        f"   GEMINI_API_KEY: "
+        f"{'OK' if GEMINI_KEY else 'MISSING'}"
+    )
+
+    print(
+        f"   SUPABASE_URL: "
+        f"{'OK' if SUPABASE_URL else 'MISSING'}"
+    )
+
+    print(
+        f"   SUPABASE_KEY: "
+        f"{'OK' if SUPABASE_KEY else 'MISSING'}"
+    )
+
+    print(
+        f"   CHANNEL_ID: "
+        f"{CHANNEL_ID}"
+    )
+
+    if not BOT_TOKEN:
+        print(
+            "❌ لا يمكن تشغيل البوت بدون BOT_TOKEN"
+        )
+        return False
+
+    if not SUPABASE_URL:
+        print(
+            "⚠️ SUPABASE_URL غير موجود"
+        )
+
+    if not SUPABASE_KEY:
+        print(
+            "⚠️ SUPABASE_KEY غير موجود"
+        )
+
+    if not GEMINI_KEY:
+        print(
+            "⚠️ GEMINI_API_KEY غير موجود "
+            "— وضع الأخبار سيعمل، "
+            "لكن Digest لن يستطيع استخدام Gemini."
+        )
+
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════
 # التشغيل الرئيسي
 # ══════════════════════════════════════════════════════════════════
+
 def run():
+
+    print(
+        "\n"
+        "══════════════════════════════════════════\n"
+        "🛡 رادار المخاطر المصري\n"
+        "══════════════════════════════════════════"
+    )
 
     mode = os.environ.get(
         "RUN_MODE",
         "news"
+    ).strip().lower()
+
+    print(
+        f"⚙️ RUN_MODE = {mode}"
     )
 
+    if not configuration_check():
+        return
+
+    # --------------------------------------------------------------
+    # Digest / PDF
+    # --------------------------------------------------------------
+
     if mode == "digest":
+
+        print(
+            "📊 وضع الموجز اليومي"
+        )
+
+        if not telegram_health_check():
+            print(
+                "❌ تم إيقاف Digest بسبب مشكلة Telegram"
+            )
+            return
 
         run_daily_digest()
 
@@ -3075,21 +3660,52 @@ def run():
 
     if mode == "pdf":
 
+        print(
+            "📋 وضع PDF"
+        )
+
+        if not telegram_health_check():
+            print(
+                "❌ تم إيقاف PDF بسبب مشكلة Telegram"
+            )
+            return
+
         run_pdf_report()
 
         return
 
-    print(
-        "🛡 رادار المخاطر — يعمل..."
-    )
+    # --------------------------------------------------------------
+    # News
+    # --------------------------------------------------------------
 
     print(
-        "📦 جاري تحميل الأخبار "
+        "🛡 وضع الأخبار — يعمل..."
+    )
+
+    # --------------------------------------------------------------
+    # Telegram health check
+    # --------------------------------------------------------------
+
+    if not telegram_health_check():
+
+        print(
+            "\n"
+            "❌ فشل فحص Telegram.\n"
+            "لن يبدأ جلب الأخبار حتى لا يتم تشغيل "
+            "الدورة بالكامل بدون إمكانية نشرها."
+        )
+
+        return
+
+    print(
+        "\n📦 جاري تحميل الأخبار "
         "المرسلة من Supabase..."
     )
 
-    # الاحتفاظ بالـ hash للتوافق،
-    # لكن قرار التكرار أصبح source-aware.
+    # --------------------------------------------------------------
+    # Supabase memory
+    # --------------------------------------------------------------
+
     sent_hashes = (
         supabase_get_hashes()
     )
@@ -3099,8 +3715,7 @@ def run():
     )
 
     print(
-        f"   {len(sent_hashes)} خبر محفوظ "
-        f"مسبقاً"
+        f"   {len(sent_hashes)} hash محفوظ مسبقاً"
     )
 
     print(
@@ -3110,51 +3725,123 @@ def run():
 
     new_count = 0
 
-    # ══════════════════════════════════════════════════════════════
+    # --------------------------------------------------------------
     # RSS
-    # ══════════════════════════════════════════════════════════════
+    # --------------------------------------------------------------
+
+    print(
+        "\n"
+        "════════ RSS SOURCES ════════"
+    )
+
     for src in RSS_SOURCES:
 
         print(
-            f"  📡 RSS: "
+            f"\n  📡 RSS: "
             f"{src['name']}..."
         )
 
-        count, sent_hashes, recent_news = (
-            fetch_rss(
-                src,
-                sent_hashes,
-                recent_news
+        try:
+
+            count, sent_hashes, recent_news = (
+                fetch_rss(
+                    src,
+                    sent_hashes,
+                    recent_news
+                )
             )
-        )
 
-        new_count += count
+            new_count += count
 
-    # ══════════════════════════════════════════════════════════════
+            print(
+                f"     → تم نشر {count} خبر"
+            )
+
+        except Exception as e:
+
+            print(
+                f"     ❌ خطأ غير متوقع في "
+                f"{src['name']}: {e}"
+            )
+
+    # --------------------------------------------------------------
     # Scraping
-    # ══════════════════════════════════════════════════════════════
+    # --------------------------------------------------------------
+
+    print(
+        "\n"
+        "════════ SCRAPING SOURCES ════════"
+    )
+
     for src in SCRAPE_SOURCES:
 
         print(
-            f"  🕷️ Scraping: "
+            f"\n  🕷️ Scraping: "
             f"{src['name']}..."
         )
 
-        count, sent_hashes, recent_news = (
-            fetch_scrape(
-                src,
-                sent_hashes,
-                recent_news
-            )
-        )
+        try:
 
-        new_count += count
+            count, sent_hashes, recent_news = (
+                fetch_scrape(
+                    src,
+                    sent_hashes,
+                    recent_news
+                )
+            )
+
+            new_count += count
+
+            print(
+                f"     → تم نشر {count} خبر"
+            )
+
+        except Exception as e:
+
+            print(
+                f"     ❌ خطأ غير متوقع في "
+                f"{src['name']}: {e}"
+            )
+
+    # --------------------------------------------------------------
+    # Final
+    # --------------------------------------------------------------
 
     print(
-        f"\n✅ تم نشر "
-        f"{new_count} خبر جديد"
+        "\n"
+        "══════════════════════════════════════════"
+    )
+
+    print(
+        f"✅ تم نشر {new_count} خبر جديد"
+    )
+
+    print(
+        "🛡 انتهى تشغيل رادار المخاطر"
+    )
+
+    print(
+        "══════════════════════════════════════════\n"
     )
 
 
 if __name__ == "__main__":
-    run()
+    try:
+
+        run()
+
+    except KeyboardInterrupt:
+
+        print(
+            "\n⛔ تم إيقاف التشغيل يدويًا"
+        )
+
+    except Exception as e:
+
+        print(
+            "\n"
+            "❌ خطأ رئيسي غير متوقع:\n"
+            f"{type(e).__name__}: {e}"
+        )
+
+        raise
