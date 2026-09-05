@@ -155,36 +155,82 @@ RSS_SOURCES = [
 # المصادر — Scraping
 # ══════════════════════════════════════════════════════════════════
 SCRAPE_SOURCES = [
+    # ── عاجل ──────────────────────────────────────────────────────
     {
-        "id": "independent_breaking", "name": "Independent عربي",
-        "url": "https://www.independentarabia.com/tags/%D8%A7%D9%84%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A",
-        "tab": "breaking", "base": "https://www.independentarabia.com", "exclude": [],
+        "id": "independent_breaking",
+        "name": "Independent عربي",
+        "url": "https://www.independentarabia.com/tags/%D9%85%D8%B5%D8%B1",
+        "tab": "breaking",
+        "base": "https://www.independentarabia.com",
+        "exclude": [],
     },
     {
-        "id": "almal_cbe", "name": "المال - مركزي",
-        "url": "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/",
-        "tab": "cbe", "base": "https://almalnews.com", "exclude": [],
-    },
-    {
-        "id": "economyplus_breaking", "name": "Economy Plus - أخبار",
+        "id": "economyplus_breaking",
+        "name": "Economy Plus - أخبار",
         "url": "https://economyplusme.com/category/%d8%a3%d8%ae%d8%a8%d8%a7%d8%b1/",
-        "tab": "breaking", "base": "https://economyplusme.com", "exclude": [],
+        "tab": "breaking",
+        "base": "https://economyplusme.com",
+        "exclude": [],
     },
     {
-        "id": "elbalad_factory_fire", "name": "صدى البلد - حريق مصنع",
-        "url": "https://www.elbalad.news/search/term?search=%D8%AD%D8%B1%D9%8A%D9%82-%D9%85%D8%B5%D9%86%D8%B9&pageIndex=1",
-        "tab": "warning", "base": "https://www.elbalad.news",
-        "exclude": [], "require_kw": ["حريق", "مصنع"],
-    },
-    {
-        "id": "hapi_important_breaking", "name": "حابي - أهم الأخبار",
+        "id": "hapi_important_breaking",
+        "name": "حابي - أهم الأخبار",
         "url": "https://hapijournal.com/tag/%d8%a3%d9%87%d9%85-%d8%a7%d9%84%d8%a3%d8%ae%d8%a8%d8%a7%d8%b1/",
-        "tab": "breaking", "base": "https://hapijournal.com", "exclude": [],
+        "tab": "breaking",
+        "base": "https://hapijournal.com",
+        "exclude": [],
+    },
+    # ── إنذار مبكر ────────────────────────────────────────────────
+    {
+        "id": "ahram_economy",
+        "name": "الأهرام - اقتصاد",
+        "url": "https://gate.ahram.org.eg/Portal/14/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF.aspx",
+        "tab": "warning",
+        "base": "https://gate.ahram.org.eg",
+        "exclude": [],
     },
     {
-        "id": "egyptbanks_banks", "name": "مباشر بنوك مصر",
+        "id": "youm7_economy",
+        "name": "اليوم السابع - اقتصاد",
+        "url": "https://m.youm7.com/Section/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D9%88%D8%A8%D9%88%D8%B1%D8%B5%D8%A9/297/1",
+        "tab": "warning",
+        "base": "https://m.youm7.com",
+        "exclude": ["سعر", "أسعار", "الذهب", "الدولار", "العملات", "سعر الذهب", "أسعار الذهب"],
+    },
+    {
+        "id": "elbalad_factory_fire",
+        "name": "صدى البلد - حريق مصنع",
+        "url": "https://www.elbalad.news/search/term?search=%D8%AD%D8%B1%D9%8A%D9%82-%D9%85%D8%B5%D9%86%D8%B9&pageIndex=1",
+        "tab": "warning",
+        "base": "https://www.elbalad.news",
+        "exclude": [],
+        "require_kw": ["حريق", "مصنع"],
+    },
+    # ── البنوك ────────────────────────────────────────────────────
+    {
+        "id": "masrawy_banks",
+        "name": "مصراوي - البنوك",
+        "url": "https://www.masrawy.com/news/news-banking/section/847/%d8%a3%d8%ae%d8%a8%d8%a7%d8%b1-%d8%a7%d9%84%d8%a8%d9%86%d9%88%d9%83-",
+        "tab": "banks",
+        "base": "https://www.masrawy.com",
+        "exclude": ["سعر", "أسعار"],
+    },
+    {
+        "id": "egyptbanks_banks",
+        "name": "مباشر بنوك مصر",
         "url": "https://egyptbanks.info/news",
-        "tab": "banks", "base": "https://egyptbanks.info", "exclude": [],
+        "tab": "banks",
+        "base": "https://egyptbanks.info",
+        "exclude": [],
+    },
+    # ── المركزي ───────────────────────────────────────────────────
+    {
+        "id": "almal_cbe",
+        "name": "المال - مركزي",
+        "url": "https://almalnews.com/tag/%D8%A7%D9%84%D8%A8%D9%86%D9%83-%D8%A7%D9%84%D9%85%D8%B1%D9%83%D8%B2%D9%8A-%D8%A7%D9%84%D9%85%D8%B5%D8%B1%D9%8A/",
+        "tab": "cbe",
+        "base": "https://almalnews.com",
+        "exclude": [],
     },
 ]
 
