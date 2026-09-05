@@ -190,11 +190,11 @@ SCRAPE_SOURCES = [
         "exclude": [],
     },
     {
-        "id": "youm7_economy",
-        "name": "اليوم السابع - اقتصاد",
-        "url": "https://m.youm7.com/Section/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D9%88%D8%A8%D9%88%D8%B1%D8%B5%D8%A9/297/1",
+        "id": "shorouk_economy",
+        "name": "الشروق - اقتصاد",
+        "url": "https://www.shorouknews.com/mobile/news/section.aspx?id=6514de51-b725-4610-817e-1a19f3f0755d",
         "tab": "warning",
-        "base": "https://m.youm7.com",
+        "base": "https://www.shorouknews.com",
         "exclude": ["سعر", "أسعار"],
     },
     {
