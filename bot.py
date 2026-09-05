@@ -214,6 +214,22 @@ SCRAPE_SOURCES = [
         "base": "https://almalnews.com",
         "exclude": [],
     },
+    {
+        "id": "enterprise_ma",
+        "name": "انتربرايز - دمج واستحواذ",
+        "url": "https://enterpriseam.com/egypt-ar/category/%d8%a3%d8%b9%d9%85%d8%a7%d9%84/%d8%af%d9%85%d8%ac-%d9%88%d8%a7%d8%b3%d8%aa%d8%ad%d9%88%d8%a7%d8%b0/",
+        "tab": "warning",
+        "base": "https://enterpriseam.com",
+        "exclude": [],
+    },
+    {
+        "id": "enterprise_debt",
+        "name": "انتربرايز - ديون",
+        "url": "https://enterpriseam.com/egypt-ar/category/%d8%a3%d8%b9%d9%85%d8%a7%d9%84/%d8%af%d9%8a%d9%88%d9%86/",
+        "tab": "warning",
+        "base": "https://enterpriseam.com",
+        "exclude": [],
+    },
     # ── البنوك ────────────────────────────────────────────────────
     {
         "id": "masrawy_banks",
