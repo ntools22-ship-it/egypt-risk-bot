@@ -157,11 +157,11 @@ RSS_SOURCES = [
 SCRAPE_SOURCES = [
     # ── عاجل ──────────────────────────────────────────────────────
     {
-        "id": "independent_breaking",
-        "name": "Independent عربي",
-        "url": "https://www.independentarabia.com/tags/%D9%85%D8%B5%D8%B1",
+        "id": "alarabiya_egypt_economy",
+        "name": "العربية - اقتصاد مصر",
+        "url": "https://www.alarabiya.net/aswaq/egypt-economy",
         "tab": "breaking",
-        "base": "https://www.independentarabia.com",
+        "base": "https://www.alarabiya.net",
         "exclude": [],
     },
     {
