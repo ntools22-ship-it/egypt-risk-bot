@@ -195,7 +195,7 @@ SCRAPE_SOURCES = [
         "url": "https://m.youm7.com/Section/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D9%88%D8%A8%D9%88%D8%B1%D8%B5%D8%A9/297/1",
         "tab": "warning",
         "base": "https://m.youm7.com",
-        "exclude": ["سعر", "أسعار", "الذهب", "الدولار", "العملات", "سعر الذهب", "أسعار الذهب"],
+        "exclude": ["سعر", "أسعار"],
     },
     {
         "id": "elbalad_factory_fire",
@@ -205,6 +205,14 @@ SCRAPE_SOURCES = [
         "base": "https://www.elbalad.news",
         "exclude": [],
         "require_kw": ["حريق", "مصنع"],
+    },
+    {
+        "id": "almal_investment",
+        "name": "المال - استثمار",
+        "url": "https://almalnews.com/category/investment/1/",
+        "tab": "warning",
+        "base": "https://almalnews.com",
+        "exclude": [],
     },
     # ── البنوك ────────────────────────────────────────────────────
     {
@@ -231,6 +239,7 @@ SCRAPE_SOURCES = [
         "tab": "cbe",
         "base": "https://almalnews.com",
         "exclude": [],
+        "require_kw": ["المركزي", "البنك المركزي"],
     },
 ]
 
