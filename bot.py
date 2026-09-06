@@ -230,6 +230,14 @@ SCRAPE_SOURCES = [
         "base": "https://enterpriseam.com",
         "exclude": [],
     },
+    {
+        "id": "borsaa_special",
+        "name": "البورصة نيوز - خاص",
+        "url": "https://www.alborsaanews.com/latestnews",
+        "tab": "warning",
+        "base": "https://www.alborsaanews.com",
+        "exclude": [],
+    },
     # ── البنوك ────────────────────────────────────────────────────
     {
         "id": "masrawy_banks",
