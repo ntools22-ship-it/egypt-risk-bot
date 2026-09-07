@@ -255,6 +255,14 @@ SCRAPE_SOURCES = [
         "base": "https://egyptbanks.info",
         "exclude": [],
     },
+    {
+        "id": "youm7_agri",
+        "name": "اليوم السابع - زراعة",
+        "url": "https://m.youm7.com/Tags/Index?id=15133&tag=%d9%88%d8%b2%d8%a7%d8%b1%d8%a9-%d8%a7%d9%84%d8%b2%d8%b1%d8%a7%d8%b9%d8%a9",
+        "tab": "sector_agri",
+        "base": "https://m.youm7.com",
+        "exclude": [],
+    },
     # ── المركزي ───────────────────────────────────────────────────
     {
         "id": "almal_cbe",
@@ -514,6 +522,25 @@ def supabase_get_news_for_pdf():
             return r.json()
     except Exception as e:
         print(f"Supabase PDF error: {e}")
+    return []
+
+
+def supabase_get_last_7days():
+    """أخبار آخر 7 أيام للتقرير الأسبوعي"""
+    if not supabase_ready():
+        return []
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/news",
+            params={"select": "title,tabs,created_at",
+                    "created_at": f"gte.{since}", "order": "created_at.asc"},
+            headers=sb_headers(), timeout=20,
+        )
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"Supabase get_last_7days error: {e}")
     return []
 
 
@@ -1079,29 +1106,210 @@ def run_daily_digest():
     )
     time.sleep(3)
     ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+    all_headlines_for_overview = []
+
     for tab in ordered:
         headlines = grouped[tab]
         if not headlines:
             continue
         tab_label = TAB_LABELS.get(tab, tab)
+        all_headlines_for_overview.extend(headlines)
+
+        # ── العناوين دائماً (بغض النظر عن Gemini) ──
+        headlines_text = "\n".join(f"• {escape_md(h)}" for h in headlines[:15])
+        header = (
+            f"{'━'*16}\n"
+            f"*{escape_md(tab_label)}*  \\| {len(headlines)} خبر\n"
+            f"{'━'*16}\n\n"
+            f"{headlines_text}"
+        )
+
+        # ── تحليل Gemini (اختياري — لو نجح يُضاف) ──
         print(f"  🤖 Gemini: {tab_label} ({len(headlines)} خبر)...")
         analysis = ask_gemini(build_prompt(tab_label, headlines))
-        if not analysis:
-            continue
-        analysis = analysis.replace("**", "*")
-        msg = (
-            f"{'━'*16}\n*{escape_md(tab_label)}*  \\| {len(headlines)} خبر\n"
-            f"{'━'*16}\n\n{analysis}\n\n🛡 @egypt\\_risk\\_radar"
+        if analysis:
+            analysis = analysis.replace("**", "*")
+            full_msg = f"{header}\n\n📊 *التحليل:*\n{analysis}\n\n🛡 @egypt\\_risk\\_radar"
+            supabase_save_digest(tab, tab_label, analysis, len(headlines), now.strftime("%Y-%m-%d"))
+        else:
+            full_msg = f"{header}\n\n🛡 @egypt\\_risk\\_radar"
+
+        send(full_msg, parse_mode="Markdown")
+        time.sleep(4)
+
+    # ── نظرة عامة تحليلية شاملة ──
+    if all_headlines_for_overview:
+        print("  🔭 Gemini: النظرة العامة...")
+        overview_prompt = (
+            f"أنت محلل مخاطر أول في بنك مصري كبير.\n"
+            f"هذه عناوين أخبار اليوم {date_str} من مختلف القطاعات:\n\n"
+            + "\n".join(f"- {h}" for h in all_headlines_for_overview[:40])
+            + "\n\nاكتب نظرة عامة تحليلية مختصرة (فقرة واحدة أو اثنتان) تجيب على:\n"
+            f"1. ما الاتجاه العام للسوق اليوم؟\n"
+            f"2. أبرز إشارة خطر أو فرصة تستحق الانتباه؟\n"
+            f"باللغة العربية المهنية، بدون مقدمات."
         )
-        send(msg, parse_mode="Markdown")
-        supabase_save_digest(tab, tab_label, analysis, len(headlines), now.strftime("%Y-%m-%d"))
-        time.sleep(5)
+        overview = ask_gemini(overview_prompt)
+        if overview:
+            overview = overview.replace("**", "*")
+            send(
+                f"🔭 *النظرة العامة — {escape_md(date_str)}*\n"
+                f"{'━'*16}\n\n{overview}\n\n🛡 @egypt\\_risk\\_radar",
+                parse_mode="Markdown",
+            )
+            time.sleep(3)
+
     send(
         f"✅ *انتهى موجز {escape_md(date_str)}*\n\n"
         f"تابع أخبار السوق لحظة بلحظة\n🛡 @egypt\\_risk\\_radar",
         parse_mode="Markdown",
     )
     print("✅ انتهى الموجز اليومي")
+
+
+# ══════════════════════════════════════════════════════════════════
+# التقرير اليومي والأسبوعي
+# ══════════════════════════════════════════════════════════════════
+def build_report_prompt(period_label, grouped, total, date_info):
+    """بناء prompt التقرير الشامل"""
+    sections = []
+    for tab, headlines in grouped.items():
+        label = TAB_LABELS.get(tab, tab)
+        sample = "\n".join(f"  - {h}" for h in headlines[:8])
+        sections.append(f"**{label}** ({len(headlines)} خبر):\n{sample}")
+    sections_text = "\n\n".join(sections)
+
+    return (
+        f"أنت كبير محللي المخاطر في بنك مصري كبير.\n"
+        f"هذا {period_label} بتاريخ {date_info}.\n"
+        f"إجمالي الأخبار: {total} خبراً في {len(grouped)} قطاعات.\n\n"
+        f"الأخبار المصنفة:\n{sections_text}\n\n"
+        f"اكتب تقريراً مهنياً شاملاً يتضمن:\n"
+        f"1. ملخص تنفيذي (3-4 أسطر): الصورة العامة للسوق\n"
+        f"2. أبرز إشارات الخطر المبكر: ما يجب مراقبته فوراً\n"
+        f"3. تحليل القطاعات: القطاعات الأكثر نشاطاً وأسباب ذلك\n"
+        f"4. المؤشرات الائتمانية: قراءة في حركة الائتمان والتمويل\n"
+        f"5. التوصيات: 2-3 توصيات عملية لفريق المخاطر والائتمان\n\n"
+        f"الأسلوب: مهني، دقيق، موجز. باللغة العربية. بدون مقدمات."
+    )
+
+
+def send_report_to_telegram(title, analysis, date_str, period_icon="📊"):
+    """إرسال التقرير على تليجرام مع تنسيق احترافي"""
+    analysis = (analysis or "").replace("**", "*")
+    header = (
+        f"{period_icon} *{escape_md(title)}*\n"
+        f"{'━'*20}\n"
+        f"📅 {escape_md(date_str)}\n"
+        f"{'━'*20}\n\n"
+    )
+    footer = f"\n\n{'━'*20}\n🛡 @egypt\\_risk\\_radar"
+    send(header + escape_md(analysis) + footer, parse_mode="Markdown")
+
+
+def run_daily_report():
+    """التقرير اليومي الشامل — صباحاً"""
+    print("📊 جاري إعداد التقرير اليومي الشامل...")
+    news = supabase_get_last_24h()
+    if not news:
+        print("لا توجد أخبار كافية")
+        return
+
+    grouped  = group_by_tab(news)
+    now      = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+    date_str = now.strftime("%d/%m/%Y")
+
+    # إحصاءات سريعة
+    warning_count = len(grouped.get("warning", []))
+    credit_count  = len(grouped.get("credit", []) + grouped.get("banks", []))
+    top_sector    = max(
+        ((k, v) for k, v in grouped.items() if k.startswith("sector_")),
+        key=lambda x: len(x[1]), default=("—", [])
+    )
+
+    # مقدمة التقرير
+    intro = (
+        f"📊 *التقرير اليومي — {escape_md(date_str)}*\n"
+        f"{'━'*20}\n"
+        f"📰 إجمالي الأخبار: *{len(news)}* في *{len(grouped)}* قطاعات\n"
+        f"⚠️ إشارات إنذار مبكر: *{warning_count}*\n"
+        f"💰 أخبار ائتمان وبنوك: *{credit_count}*\n"
+        f"🏭 القطاع الأكثر نشاطاً: *{escape_md(TAB_LABELS.get(top_sector[0], top_sector[0]))}*"
+        f" ({len(top_sector[1])} خبر)\n"
+        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar"
+    )
+    send(intro, parse_mode="Markdown")
+    time.sleep(3)
+
+    # التحليل الشامل من Gemini
+    print("  🤖 Gemini: التقرير الشامل...")
+    prompt   = build_report_prompt("تقرير يومي شامل", grouped, len(news), date_str)
+    analysis = ask_gemini(prompt)
+
+    if analysis:
+        send_report_to_telegram("التحليل والتوصيات اليومية", analysis, date_str, "🔍")
+    else:
+        # fallback: عناوين مفصلة بدون Gemini
+        for tab in sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99):
+            tab_label = TAB_LABELS.get(tab, tab)
+            hl = "\n".join(f"• {escape_md(h)}" for h in grouped[tab][:10])
+            send(
+                f"*{escape_md(tab_label)}* | {len(grouped[tab])} خبر\n{'━'*16}\n{hl}\n\n🛡 @egypt\\_risk\\_radar",
+                parse_mode="Markdown",
+            )
+            time.sleep(3)
+
+    print("✅ انتهى التقرير اليومي")
+
+
+def run_weekly_report():
+    """التقرير الأسبوعي الشامل — الأحد"""
+    print("📅 جاري إعداد التقرير الأسبوعي...")
+    news = supabase_get_last_7days()
+    if not news:
+        print("لا توجد أخبار كافية")
+        return
+
+    grouped  = group_by_tab(news)
+    now      = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+    week_end = now.strftime("%d/%m/%Y")
+    week_start = (now - timedelta(days=6)).strftime("%d/%m/%Y")
+    period   = f"{week_start} — {week_end}"
+
+    # توزيع الأخبار يومياً
+    daily_counts = {}
+    for item in news:
+        try:
+            day = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")).astimezone(CAIRO_TZ).strftime("%d/%m")
+            daily_counts[day] = daily_counts.get(day, 0) + 1
+        except Exception:
+            pass
+
+    daily_summary = " | ".join(f"{d}: {c}" for d, c in sorted(daily_counts.items()))
+
+    # مقدمة التقرير
+    intro = (
+        f"📅 *التقرير الأسبوعي — {escape_md(period)}*\n"
+        f"{'━'*20}\n"
+        f"📰 إجمالي الأخبار: *{len(news)}* خبر\n"
+        f"📊 التوزيع اليومي: {escape_md(daily_summary)}\n"
+        f"⚠️ إشارات إنذار: *{len(grouped.get('warning', []))}*\n"
+        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar"
+    )
+    send(intro, parse_mode="Markdown")
+    time.sleep(3)
+
+    # التحليل الأسبوعي من Gemini
+    print("  🤖 Gemini: التقرير الأسبوعي...")
+    weekly_prompt = (
+        build_report_prompt("تقرير أسبوعي شامل", grouped, len(news), period)
+        + "\n\nأضف في النهاية: 6. توقعات الأسبوع القادم بناءً على الاتجاهات الحالية."
+    )
+    analysis = ask_gemini(weekly_prompt)
+    if analysis:
+        send_report_to_telegram("التحليل والتوقعات الأسبوعية", analysis, period, "📅")
+
+    print("✅ انتهى التقرير الأسبوعي")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1127,6 +1335,14 @@ def run():
 
     if mode == "digest":
         run_daily_digest()
+        return
+
+    if mode == "report_daily":
+        run_daily_report()
+        return
+
+    if mode == "report_weekly":
+        run_weekly_report()
         return
 
     if mode == "pdf":
