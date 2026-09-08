@@ -256,11 +256,11 @@ SCRAPE_SOURCES = [
         "exclude": [],
     },
     {
-        "id": "youm7_agri",
-        "name": "اليوم السابع - زراعة",
-        "url": "https://m.youm7.com/Tags/Index?id=15133&tag=%d9%88%d8%b2%d8%a7%d8%b1%d8%a9-%d8%a7%d9%84%d8%b2%d8%b1%d8%a7%d8%b9%d8%a9",
+        "id": "fallahalyoum_agri",
+        "name": "الفلاح اليوم - زراعة",
+        "url": "https://alfallahalyoum.news/category/akhbaralzra/",
         "tab": "sector_agri",
-        "base": "https://m.youm7.com",
+        "base": "https://alfallahalyoum.news",
         "exclude": [],
     },
     # ── المركزي ───────────────────────────────────────────────────
