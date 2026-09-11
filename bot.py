@@ -256,6 +256,14 @@ SCRAPE_SOURCES = [
         "exclude": [],
     },
     {
+        "id": "firstbank_banks",
+        "name": "Firstbank - قوائم",
+        "url": "https://www.firstbankeg.com/List/11",
+        "tab": "banks",
+        "base": "https://www.firstbankeg.com",
+        "exclude": [],
+    },
+    {
         "id": "fallahalyoum_agri",
         "name": "الفلاح اليوم - زراعة",
         "url": "https://alfallahalyoum.news/category/akhbaralzra/",
@@ -457,8 +465,8 @@ def supabase_get_recent_news_for_dedupe():
                 headers=sb_headers(), timeout=20,
             )
             if r.status_code != 200:
-                print(f"Supabase recent HTTP {r.status_code}")
-                break
+                print(f"Supabase recent HTTP {r.status_code}: {r.text[:250]}")
+                return None
             data = r.json()
             if not data:
                 break
@@ -468,6 +476,7 @@ def supabase_get_recent_news_for_dedupe():
             offset += page_size
     except Exception as e:
         print(f"Supabase recent error: {e}")
+        return None
     return all_items
 
 
@@ -490,58 +499,84 @@ def supabase_save_news(title, url, source_name, tabs, h):
         return False
 
 
-def supabase_get_last_24h():
+def supabase_get_news_between(start_utc, end_utc, select_fields=None):
+    """Paginated range query: None = DB error, [] = valid empty result."""
     if not supabase_ready():
         return []
+    select_fields = select_fields or "title,url,source_name,tabs,created_at"
+    all_items, offset, page_size = [], 0, 1000
     try:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news",
-            params={"select": "title,tabs", "created_at": f"gte.{since}", "order": "created_at.asc"},
-            headers=sb_headers(), timeout=15,
-        )
-        if r.status_code == 200:
-            return r.json()
+        while True:
+            params = [
+                ("select", select_fields),
+                ("created_at", f"gte.{start_utc.isoformat()}"),
+                ("created_at", f"lt.{end_utc.isoformat()}"),
+                ("order", "created_at.asc"),
+                ("limit", str(page_size)),
+                ("offset", str(offset)),
+            ]
+            r = requests.get(
+                f"{SUPABASE_URL}/rest/v1/news",
+                params=params,
+                headers=sb_headers(), timeout=20,
+            )
+            if r.status_code != 200:
+                print(f"Supabase range HTTP {r.status_code}: {r.text[:300]}")
+                return None
+            data = r.json()
+            all_items.extend(data)
+            if len(data) < page_size:
+                break
+            offset += page_size
+            if offset >= 100000:
+                print("⚠️ Supabase range capped at 100,000 rows")
+                break
+        return all_items
     except Exception as e:
-        print(f"Supabase last24h error: {e}")
-    return []
+        print(f"Supabase range error: {e}")
+        return None
+
+
+def supabase_get_last_24h():
+    now = datetime.now(timezone.utc)
+    return supabase_get_news_between(
+        now - timedelta(hours=24), now,
+        "title,tabs,created_at"
+    )
 
 
 def supabase_get_news_for_pdf():
-    if not supabase_ready():
-        return []
-    try:
-        since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news",
-            params={"select": "title,url,source_name,tabs,created_at",
-                    "created_at": f"gte.{since}", "order": "created_at.asc"},
-            headers=sb_headers(), timeout=20,
-        )
-        if r.status_code == 200:
-            return r.json()
-    except Exception as e:
-        print(f"Supabase PDF error: {e}")
-    return []
+    now = datetime.now(timezone.utc)
+    return supabase_get_news_between(
+        now - timedelta(hours=24), now,
+        "title,url,source_name,tabs,created_at"
+    )
+
+
+def get_previous_completed_week_bounds():
+    """الأسبوع المكتمل السابق: الأحد 00:00 إلى السبت 23:59 بتوقيت القاهرة."""
+    now = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+    today = now.date()
+    days_since_sunday = (today.weekday() + 1) % 7
+    this_sunday = today - timedelta(days=days_since_sunday)
+    prev_sunday = this_sunday - timedelta(days=7)
+
+    start_cairo = datetime.combine(prev_sunday, datetime.min.time(), tzinfo=CAIRO_TZ)
+    end_cairo = datetime.combine(this_sunday, datetime.min.time(), tzinfo=CAIRO_TZ)
+    return (
+        start_cairo.astimezone(timezone.utc),
+        end_cairo.astimezone(timezone.utc),
+        prev_sunday,
+        this_sunday - timedelta(days=1),
+    )
 
 
 def supabase_get_last_7days():
-    """أخبار آخر 7 أيام للتقرير الأسبوعي"""
-    if not supabase_ready():
-        return []
-    try:
-        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/news",
-            params={"select": "title,tabs,created_at",
-                    "created_at": f"gte.{since}", "order": "created_at.asc"},
-            headers=sb_headers(), timeout=20,
-        )
-        if r.status_code == 200:
-            return r.json()
-    except Exception as e:
-        print(f"Supabase get_last_7days error: {e}")
-    return []
+    start_utc, end_utc, _, _ = get_previous_completed_week_bounds()
+    return supabase_get_news_between(
+        start_utc, end_utc,
+        "title,url,source_name,tabs,created_at"
+    )
 
 
 def supabase_save_digest(tab_key, tab_label, content, news_count, digest_date):
@@ -615,7 +650,27 @@ def is_excluded(title, extra=None):
 def passes_require_kw(title, require_kw):
     if not require_kw:
         return True
-    return all(kw in title for kw in require_kw)
+    n = normalize_arabic(title)
+    return all(normalize_arabic(kw) in n for kw in require_kw)
+
+
+CBE_TITLE_KW = [
+    "البنك المركزي",
+    "المركزي",
+    "محافظ البنك المركزي",
+    "محافظ المركزي",
+    "البنك المركزى",
+    "محافظ البنك المركزى",
+]
+
+
+def is_cbe_title(title):
+    n = normalize_arabic(title)
+    return any(normalize_arabic(k) in n for k in CBE_TITLE_KW)
+
+
+def get_tabs_for_title(primary_tab, title):
+    return ["cbe"] if is_cbe_title(title) else ([primary_tab] if primary_tab else ["breaking"])
 
 
 def is_recent(dt, max_hours=24):
@@ -733,37 +788,37 @@ def process_item(title, url, source_name, primary_tab, summary,
         return False, sent_hashes, recent_news
 
     title = str(title).strip()
-    url   = canonical_url(url)
+    url = canonical_url(url)
 
     if not is_arabic(title):
         return False, sent_hashes, recent_news
 
-    if is_excluded(title, exclude):
+    # أولوية مطلقة للمركزي: لا تبويب آخر ولا فلتر مصدر يمنع الخبر.
+    cbe_override = is_cbe_title(title)
+
+    if not cbe_override and is_excluded(title, exclude):
         print(f"    ⛔ مستبعد: {title[:80]}")
         return False, sent_hashes, recent_news
 
-    if not passes_require_kw(title, require_kw or []):
+    if not cbe_override and not passes_require_kw(title, require_kw or []):
         return False, sent_hashes, recent_news
 
-    # فلتر التاريخ — فقط لو موجود (RSS)
     if published_at is not None and not is_recent(published_at):
         print(f"    ⏳ قديم: {title[:70]}")
         return False, sent_hashes, recent_news
 
-    # ← فحص Hash أولاً (سريع)
     h = make_hash(title)
     if h in sent_hashes:
         print(f"    ♻️ Hash مكرر: {title[:70]}")
         return False, sent_hashes, recent_news
 
-    # فحص التشابه مع الأخبار السابقة
     dup, reason = is_duplicate(title, url, source_name, recent_news)
     if dup:
         print(f"    ♻️ مكرر ({reason}): {title[:70]}")
         return False, sent_hashes, recent_news
 
-    tabs = get_tabs(primary_tab)
-    msg  = format_msg(title, url, source_name, tabs)
+    tabs = get_tabs_for_title(primary_tab, title)
+    msg = format_msg(title, url, source_name, tabs)
 
     if send(msg, parse_mode="HTML"):
         sent_hashes.add(h)
@@ -772,9 +827,10 @@ def process_item(title, url, source_name, primary_tab, summary,
             print("    ⚠️ أُرسل لكن فشل حفظه في Supabase")
         recent_news.insert(0, {
             "title": title, "url": url, "source_name": source_name,
+            "tabs": tabs,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-        print(f"    ✅ {title[:80]}")
+        print(f"    {'🏛️ CBE override: ' if cbe_override else ''}✅ {title[:80]}")
         time.sleep(2)
         return True, sent_hashes, recent_news
 
@@ -930,386 +986,794 @@ def ar(text):
         return str(text)
 
 
-def generate_daily_pdf(news_list, now_cairo):
+def normalize_tabs_field(value):
+    if isinstance(value, list):
+        return [str(x) for x in value if x]
+    if isinstance(value, str):
+        return [x.strip() for x in value.split(",") if x.strip()]
+    return []
+
+
+def item_cairo_dt(item):
+    try:
+        dt = datetime.fromisoformat(str(item.get("created_at", "")).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(CAIRO_TZ)
+    except Exception:
+        return None
+
+
+def download_font():
+    if os.path.exists(FONT_PATH):
+        return True
+    try:
+        print("⬇️ جاري تحميل الخط العربي...")
+        r = requests.get(FONT_URL, timeout=30)
+        if r.status_code == 200 and len(r.content) > 10000:
+            with open(FONT_PATH, "wb") as f:
+                f.write(r.content)
+            print("✅ تم تحميل الخط")
+            return True
+        print(f"❌ فشل تحميل الخط: HTTP {r.status_code}")
+    except Exception as e:
+        print(f"❌ Font error: {e}")
+    return False
+
+
+def ar(text):
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(str(text)))
+    except Exception:
+        return str(text)
+
+
+def clean_pdf_text(text):
+    return re.sub(r"[*_`#]+", "", str(text or "")).strip()
+
+
+def pdf_write_wrapped(pdf, text, size=10, align="R", link=None, fill=False):
+    pdf.set_font("Amiri", size=size)
+    pdf.multi_cell(
+        0, 6.5, ar(clean_pdf_text(text)),
+        align=align, link=link or "", fill=fill
+    )
+
+
+def add_pdf_ai_analysis(pdf, analysis, heading):
+    if not analysis:
+        return
+    pdf.set_text_color(26, 60, 94)
+    pdf.set_font("Amiri", size=14)
+    pdf.cell(0, 10, ar(heading), ln=True, align="R")
+    for line in str(analysis).splitlines():
+        line = clean_pdf_text(line)
+        if not line:
+            pdf.ln(2)
+            continue
+        pdf.set_text_color(40, 40, 40)
+        pdf_write_wrapped(pdf, line, size=9)
+        pdf.ln(0.5)
+    pdf.ln(4)
+
+
+def make_pdf_base(title, subtitle):
     from fpdf import FPDF
     if not download_font():
         raise RuntimeError("تعذر تحميل خط Amiri")
-
-    date_str = now_cairo.strftime("%d/%m/%Y")
-    grouped  = {}
-    for item in news_list:
-        for tab in item.get("tabs", []):
-            grouped.setdefault(tab, []).append(item)
-    ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
-
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_font("Amiri", "", FONT_PATH, uni=True)
     pdf.add_page()
 
-    # رأس
     pdf.set_fill_color(26, 60, 94)
-    pdf.rect(0, 0, 210, 30, "F")
-    pdf.set_font("Amiri", size=18)
+    pdf.rect(0, 0, 210, 31, "F")
+    pdf.set_font("Amiri", size=17)
     pdf.set_text_color(255, 255, 255)
     pdf.set_y(6)
-    pdf.cell(0, 9, ar("رادار المخاطر — تقرير الأخبار اليومي"), ln=True, align="C")
-    pdf.set_font("Amiri", size=11)
-    pdf.cell(0, 8, ar(f"{date_str}  |  {len(news_list)} خبر في {len(grouped)} تبويبات"), ln=True, align="C")
+    pdf.cell(0, 9, ar("رادار المخاطر المصري"), ln=True, align="C")
+    pdf.set_font("Amiri", size=12)
+    pdf.cell(0, 8, ar(title), ln=True, align="C")
+    pdf.set_text_color(80, 80, 80)
     pdf.ln(8)
+    pdf.set_font("Amiri", size=9)
+    pdf.multi_cell(0, 6, ar(subtitle), align="R")
+    pdf.ln(3)
+    return pdf
 
-    for tab in ordered:
-        items     = grouped[tab]
-        tab_label = TAB_LABELS.get(tab, tab)
-        pdf.set_fill_color(26, 60, 94)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Amiri", size=13)
-        pdf.cell(0, 10, ar(f"{tab_label} ({len(items)} خبر)"), ln=True, align="R", fill=True)
-        pdf.ln(1)
 
-        for i, item in enumerate(items):
-            title  = item.get("title", "")
-            url    = item.get("url", "")
-            source = item.get("source_name", "")
-            try:
-                dt = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00"))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                time_str = dt.astimezone(CAIRO_TZ).strftime("%H:%M")
-            except Exception:
-                time_str = ""
+def add_pdf_news_item(pdf, item, index=0):
+    title = item.get("title", "")
+    url = item.get("url", "")
+    source = item.get("source_name", "")
+    dt = item_cairo_dt(item)
+    date_time = dt.strftime("%d/%m/%Y %H:%M") if dt else ""
 
-            pdf.set_fill_color(245, 249, 252) if i % 2 == 0 else pdf.set_fill_color(255, 255, 255)
-            pdf.set_font("Amiri", size=10)
-            pdf.set_text_color(26, 60, 94)
-            pdf.multi_cell(0, 7, f"  {ar(title)}", align="R", fill=True, link=url or "")
-            pdf.set_font("Amiri", size=9)
-            pdf.set_text_color(130, 130, 130)
-            pdf.cell(0, 6, f"  {ar(source)} | {time_str}", ln=True, align="R")
-            pdf.ln(1)
-        pdf.ln(5)
+    pdf.set_fill_color(245, 249, 252) if index % 2 == 0 else pdf.set_fill_color(255, 255, 255)
+    pdf.set_text_color(26, 60, 94)
+    pdf_write_wrapped(pdf, title, size=10, link=url, fill=True)
+    pdf.set_text_color(110, 110, 110)
+    pdf.set_font("Amiri", size=8.5)
+    pdf.multi_cell(0, 5.5, ar(f"📰 {source}   |   🕒 {date_time}"), align="R")
 
-    pdf.set_y(-15)
-    pdf.set_font("Amiri", size=8)
-    pdf.set_text_color(170, 170, 170)
-    pdf.cell(0, 8, ar(f"رادار المخاطر — @egypt_risk_radar — {date_str}"), align="C")
+    if url:
+        pdf.set_text_color(70, 70, 120)
+        pdf.set_font("Amiri", size=7.5)
+        # الرابط ظاهر وقابل للنقر.
+        pdf.multi_cell(0, 5, url, align="L", link=url)
+    pdf.ln(2)
+
+
+def finish_pdf(pdf, footer_text):
+    pdf.set_y(-14)
+    pdf.set_font("Amiri", size=7.5)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 7, ar(footer_text), align="C")
     return bytes(pdf.output())
 
 
-def send_pdf(pdf_bytes, date_str):
+def generate_daily_pdf(news_list, now_cairo, ai_analysis=None, title="تقرير الأخبار اليومي"):
+    grouped = {}
+    for item in news_list:
+        for tab in normalize_tabs_field(item.get("tabs")):
+            grouped.setdefault(tab, []).append(item)
+
+    ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+    subtitle = (
+        f"الفترة: آخر 24 ساعة حتى {now_cairo.strftime('%d/%m/%Y %H:%M')} بتوقيت القاهرة"
+        f" | إجمالي الأخبار: {len(news_list)} | {len(grouped)} تبويبات"
+    )
+    pdf = make_pdf_base(title, subtitle)
+    add_pdf_ai_analysis(pdf, ai_analysis, "التحليل المهني اليومي")
+
+    for tab in ordered:
+        items = sorted(
+            grouped[tab],
+            key=lambda x: item_cairo_dt(x) or datetime.min.replace(tzinfo=CAIRO_TZ)
+        )
+        pdf.set_fill_color(26, 60, 94)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Amiri", size=12)
+        pdf.cell(0, 9, ar(f"{TAB_LABELS.get(tab, tab)} ({len(items)} خبر)"), ln=True, align="R", fill=True)
+        pdf.ln(1)
+        for i, item in enumerate(items):
+            add_pdf_news_item(pdf, item, i)
+        pdf.ln(3)
+
+    return finish_pdf(
+        pdf,
+        f"رادار المخاطر — @egypt_risk_radar — {now_cairo.strftime('%d/%m/%Y')}"
+    )
+
+
+def generate_weekly_pdf(news_list, week_start, week_end, ai_analysis=None):
+    from collections import defaultdict
+    days = defaultdict(list)
+    for item in news_list:
+        dt = item_cairo_dt(item)
+        days[dt.date() if dt else week_start].append(item)
+
+    pdf = make_pdf_base(
+        "تقرير الأخبار الأسبوعي",
+        f"الأسبوع المكتمل: {week_start.strftime('%d/%m/%Y')} — "
+        f"{week_end.strftime('%d/%m/%Y')} | إجمالي الأخبار: {len(news_list)}"
+    )
+    add_pdf_ai_analysis(pdf, ai_analysis, "التحليل المهني الأسبوعي")
+
+    for day in sorted(days):
+        day_items = sorted(
+            days[day],
+            key=lambda x: item_cairo_dt(x) or datetime.min.replace(tzinfo=CAIRO_TZ)
+        )
+        pdf.set_fill_color(70, 70, 70)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Amiri", size=13)
+        pdf.cell(0, 10, ar(f"📅 {day.strftime('%d/%m/%Y')} — {len(day_items)} خبر"), ln=True, align="R", fill=True)
+        pdf.ln(1)
+
+        grouped = {}
+        for item in day_items:
+            for tab in normalize_tabs_field(item.get("tabs")):
+                grouped.setdefault(tab, []).append(item)
+        ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+        for tab in ordered:
+            pdf.set_text_color(26, 60, 94)
+            pdf.set_font("Amiri", size=10.5)
+            pdf.cell(0, 7, ar(f"{TAB_LABELS.get(tab, tab)} ({len(grouped[tab])})"), ln=True, align="R")
+            for i, item in enumerate(grouped[tab]):
+                add_pdf_news_item(pdf, item, i)
+        pdf.ln(4)
+
+    return finish_pdf(
+        pdf,
+        f"رادار المخاطر — @egypt_risk_radar — "
+        f"{week_start.strftime('%d/%m/%Y')} إلى {week_end.strftime('%d/%m/%Y')}"
+    )
+
+
+def send_pdf_to_chat(pdf_bytes, chat_id, filename, caption):
     if not BOT_TOKEN:
-        print("❌ PDF: BOT_TOKEN غير موجود")
         return False
     try:
-        filename = f"رادار_المخاطر_{date_str.replace('/', '-')}.pdf"
-        caption  = (
-            f"📋 *تقرير أخبار اليوم — {escape_md(date_str)}*\n"
-            f"_جميع أخبار الـ 24 ساعة الماضية مصنفة بالتبويبات_\n\n"
-            f"🛡 @egypt\\_risk\\_radar"
-        )
         r = requests.post(
             f"{API_URL}/sendDocument",
             files={"document": (filename, io.BytesIO(pdf_bytes), "application/pdf")},
-            data={"chat_id": CHANNEL_ID, "caption": caption, "parse_mode": "Markdown"},
+            data={"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"},
             timeout=60,
         )
         if r.status_code == 200:
-            print("✅ PDF اتبعت على تليجرام")
+            print(f"✅ PDF اتبعت إلى {chat_id}")
             return True
         print(f"❌ PDF Telegram {r.status_code}: {r.text[:300]}")
-        return False
     except Exception as e:
         print(f"❌ PDF send error: {e}")
-        return False
+    return False
+
+
+def send_pdf(pdf_bytes, date_str):
+    return send_pdf_to_chat(
+        pdf_bytes, CHANNEL_ID,
+        f"رادار_المخاطر_{date_str.replace('/', '-')}.pdf",
+        f"📋 *تقرير أخبار اليوم — {escape_md(date_str)}*\n"
+        f"_جميع أخبار الـ24 ساعة الماضية، بدون استثناء، مصنفة بالتبويبات._\n\n"
+        f"🛡 @egypt\\_risk\\_radar"
+    )
 
 
 def run_pdf_report():
     print("📋 جاري إعداد التقرير اليومي PDF...")
     news = supabase_get_news_for_pdf()
-    if not news:
-        print("لا توجد أخبار في الـ 24 ساعة الماضية")
+    if news is None:
+        print("❌ تعذر قراءة الأخبار من Supabase")
         return
-    now_cairo = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
-    date_str  = now_cairo.strftime("%d/%m/%Y")
-    print(f"  {len(news)} خبر — جاري توليد PDF...")
+    if not news:
+        print("لا توجد أخبار في الـ24 ساعة الماضية")
+        return
+    now = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
     try:
-        pdf_bytes = generate_daily_pdf(news, now_cairo)
-        send_pdf(pdf_bytes, date_str)
+        pdf_bytes = generate_daily_pdf(news, now)
+        send_pdf(pdf_bytes, now.strftime("%d/%m/%Y"))
     except Exception as e:
         print(f"❌ PDF error: {e}")
 
 
-# ══════════════════════════════════════════════════════════════════
-# الموجز اليومي
-# ══════════════════════════════════════════════════════════════════
-def ask_gemini(prompt):
-    if not GEMINI_KEY:
-        print("❌ GEMINI_API_KEY غير موجود")
-        return None
+def run_weekly_pdf_report():
+    print("📅 جاري إعداد PDF الأسبوعي...")
+    news = supabase_get_last_7days()
+    if news is None:
+        print("❌ تعذر قراءة الأخبار من Supabase")
+        return
+    if not news:
+        print("لا توجد أخبار في الأسبوع المكتمل")
+        return
+    _, _, start_date, end_date = get_previous_completed_week_bounds()
     try:
-        r = requests.post(
-            GEMINI_ENDPOINT,
-            params={"key": GEMINI_KEY},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=60,
+        pdf_bytes = generate_weekly_pdf(news, start_date, end_date)
+        filename = f"رادار_المخاطر_أسبوع_{start_date.strftime('%Y-%m-%d')}.pdf"
+        caption = (
+            f"📅 *التقرير الأسبوعي — {escape_md(start_date.strftime('%d/%m/%Y'))}"
+            f" — {escape_md(end_date.strftime('%d/%m/%Y'))}*\n"
+            f"_جميع أخبار الأسبوع، بدون استثناء._\n\n🛡 @egypt\\_risk\\_radar"
         )
-        if r.status_code != 200:
-            print(f"Gemini HTTP {r.status_code}: {r.text[:300]}")
-            return None
-        candidates = r.json().get("candidates", [])
-        if not candidates:
-            return None
-        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text")
-        return text.strip() if text else None
+        send_pdf_to_chat(pdf_bytes, CHANNEL_ID, filename, caption)
     except Exception as e:
-        print(f"Gemini error: {e}")
-        return None
+        print(f"❌ Weekly PDF error: {e}")
+
+
+RISK_KW = {
+    "المركزي": 8, "فائدة": 7, "سيولة": 8, "احتياطي": 8, "دولار": 6,
+    "تعثر": 9, "متعث": 9, "npl": 10, "ديون": 7, "إفلاس": 10, "إعسار": 10,
+    "تخلف عن السداد": 10, "مخصصات": 8, "اضمحلال": 8, "ائتمان": 6,
+    "قرض": 5, "تمويل": 5, "احتيال": 10, "تزوير": 10, "نصب": 9, "اختلاس": 10,
+    "غسل الأموال": 10, "aml": 10, "عقوبات": 8, "امتثال": 7, "اختراق": 10,
+    "هجوم سيبراني": 10, "تسريب بيانات": 10, "تعطل": 7, "انقطاع": 7,
+    "استمرارية الأعمال": 8, "إغلاق": 7, "حريق": 8, "تضخم": 7, "وقود": 6,
+    "ركود": 8, "انكماش": 8, "استيراد": 5, "تصدير": 5, "سعر الصرف": 7,
+    "خفض التصنيف": 9, "خسائر": 8, "تصفية": 9,
+}
 
 
 def group_by_tab(news_list):
     grouped = {}
     for item in news_list:
-        for tab in item.get("tabs", []):
+        for tab in normalize_tabs_field(item.get("tabs")):
             grouped.setdefault(tab, []).append(item.get("title", ""))
     return grouped
 
 
-def build_prompt(tab_label, headlines):
-    hl = "\n".join(f"- {h}" for h in headlines)
+def risk_score(title):
+    n = normalize_arabic(title)
+    return sum(w for kw, w in RISK_KW.items() if normalize_arabic(kw) in n)
+
+
+def select_ai_news(news_list, limit=70):
+    selected, seen_tabs = [], set()
+    for item in sorted(
+        news_list,
+        key=lambda x: item_cairo_dt(x) or datetime.min.replace(tzinfo=CAIRO_TZ),
+        reverse=True,
+    ):
+        tabs = normalize_tabs_field(item.get("tabs"))
+        if tabs and tabs[0] not in seen_tabs:
+            selected.append(item)
+            seen_tabs.add(tabs[0])
+
+    remaining = [x for x in news_list if x not in selected]
+    remaining.sort(
+        key=lambda x: (
+            risk_score(x.get("title", "")),
+            item_cairo_dt(x) or datetime.min.replace(tzinfo=CAIRO_TZ),
+        ),
+        reverse=True,
+    )
+    selected.extend(remaining[:max(0, limit - len(selected))])
+    return selected[:limit]
+
+
+def build_ai_prompt(period_label, period_text, news_list, weekly=False):
+    selected = select_ai_news(news_list)
+    lines = []
+    for item in selected:
+        dt = item_cairo_dt(item)
+        dt_text = dt.strftime("%d/%m %H:%M") if dt else ""
+        tabs = normalize_tabs_field(item.get("tabs"))
+        tab = TAB_LABELS.get(tabs[0], tabs[0]) if tabs else "غير مصنف"
+        lines.append(
+            f"[{dt_text}] [{tab}] [{item.get('source_name','')}] {item.get('title','')}"
+        )
+
+    weekly_extra = """
+للتقرير الأسبوعي أضف:
+- الاتجاهات المتكررة خلال الأسبوع.
+- الإشارات التي تصاعدت أو تراجعت.
+- القطاعات ذات الضغوط المتكررة.
+- Watchlist للأسبوع القادم.
+- هل توجد إشارات تستدعي Scenario Analysis أو RCSA Review أو Portfolio Review؟
+""" if weekly else ""
+
     return (
-        f"أنت محلل أول في قسم المخاطر والائتمان في أحد البنوك المصرية الكبرى.\n"
-        f'لديك عناوين أخبار تبويب "{tab_label}" خلال الـ 24 ساعة الماضية:\n\n'
-        f"{hl}\n\n"
-        f"المطلوب:\n"
-        f"1. عناوين الأخبار الأبرز في نقاط مختصرة\n"
-        f"2. تحليل: ما الذي يستوجب الانتباه من منظور مخاطر وائتمان؟\n"
-        f"3. تعليق مهني واحد للعاملين في القطاع\n\n"
-        f"اكتب بأسلوب احترافي وموجز باللغة العربية، بدون مقدمات أو تحيات."
+        f"أنت Senior Risk Analyst في بنك مصري كبير.\n"
+        f"الفترة: {period_label} — {period_text}\n"
+        f"إجمالي الأخبار المسجلة: {len(news_list)}. تم تمرير عينة عالية القيمة فقط وعددها {len(selected)}.\n\n"
+        "الأخبار:\n" + "\n".join(lines) + "\n\n"
+        "حلّلها عملياً من منظور:\n"
+        "- Banking Investigations / CPV / Inquiries\n"
+        "- Credit Risk / Underwriting\n"
+        "- Fraud Prevention / Fraud Risk\n"
+        "- Operational Risk / RCSA / KRI / KCI\n"
+        "- Portfolio Risk / Concentration\n"
+        "- Collections / NPL\n"
+        "- Compliance / AML\n"
+        "- Treasury / FX / Liquidity\n"
+        "- Sector Risk\n"
+        "- Business Continuity / IT / Cyber Risk\n\n"
+        "قواعد التحليل:\n"
+        "1. ميّز بين ما تدل عليه الأخبار مباشرة وبين الاستنتاج المحتمل.\n"
+        "2. لا تخترع أرقاماً أو وقائع غير موجودة.\n"
+        "3. إذا كانت الإشارة ضعيفة، قل إنها تحتاج تحققاً.\n"
+        "4. لا تكرر الأخبار؛ استخرج الإشارات المشتركة.\n"
+        "5. أعطِ إجراءات قابلة للتنفيذ داخل بنك.\n"
+        "6. صنّف Early Warning Signals إلى High / Medium / Low عند وجود أساس.\n"
+        + weekly_extra +
+        "\nاكتب بالعربية المهنية وابدأ مباشرة.\n"
+        "هيكل الإخراج:\n"
+        "1. الصورة التنفيذية للمخاطر\n"
+        "2. أبرز الإشارات المباشرة\n"
+        "3. Early Warning Signals — High / Medium / Low\n"
+        "4. CBE / Monetary / FX / Liquidity implications\n"
+        "5. Credit / Portfolio / NPL implications\n"
+        "6. CPV / Banking Investigations / Inquiries implications\n"
+        "7. Fraud / AML / Compliance implications\n"
+        "8. Operational / RCSA / BCM / IT implications\n"
+        "9. Sector Risk\n"
+        "10. Recommended Actions حسب الوظيفة\n"
+        "11. Escalation & Watchlist\n"
+        + ("12. Weekly Trends & Next-Week Outlook\n" if weekly else "")
     )
 
 
-def run_daily_digest():
-    print("📊 جاري إعداد الموجز اليومي...")
-    news = supabase_get_last_24h()
-    if not news:
-        print("لا توجد أخبار في الـ 24 ساعة الماضية")
-        return
-    grouped  = group_by_tab(news)
-    now      = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
-    date_str = now.strftime("%d/%m/%Y")
-    send(
-        f"🗞️ *موجز أنباء وتحليلات — {escape_md(date_str)}*\n"
-        f"_تقرير يومي لمتخصصي الائتمان والمخاطر_\n\n"
-        f"رصدنا اليوم *{len(news)} خبراً* في *{len(grouped)} قطاعات*\n\n"
-        f"━━━━━━━━━━━━━━━━\n🛡 @egypt\\_risk\\_radar",
-        parse_mode="Markdown",
-    )
-    time.sleep(3)
-    ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
-    all_headlines_for_overview = []
-
-    for tab in ordered:
-        headlines = grouped[tab]
-        if not headlines:
-            continue
-        tab_label = TAB_LABELS.get(tab, tab)
-        all_headlines_for_overview.extend(headlines)
-
-        # ── العناوين دائماً (بغض النظر عن Gemini) ──
-        headlines_text = "\n".join(f"• {escape_md(h)}" for h in headlines[:15])
-        header = (
-            f"{'━'*16}\n"
-            f"*{escape_md(tab_label)}*  \\| {len(headlines)} خبر\n"
-            f"{'━'*16}\n\n"
-            f"{headlines_text}"
-        )
-
-        # ── تحليل Gemini (اختياري — لو نجح يُضاف) ──
-        print(f"  🤖 Gemini: {tab_label} ({len(headlines)} خبر)...")
-        analysis = ask_gemini(build_prompt(tab_label, headlines))
-        if analysis:
-            analysis = analysis.replace("**", "*")
-            full_msg = f"{header}\n\n📊 *التحليل:*\n{analysis}\n\n🛡 @egypt\\_risk\\_radar"
-            supabase_save_digest(tab, tab_label, analysis, len(headlines), now.strftime("%Y-%m-%d"))
-        else:
-            full_msg = f"{header}\n\n🛡 @egypt\\_risk\\_radar"
-
-        send(full_msg, parse_mode="Markdown")
-        time.sleep(4)
-
-    # ── نظرة عامة تحليلية شاملة ──
-    if all_headlines_for_overview:
-        print("  🔭 Gemini: النظرة العامة...")
-        overview_prompt = (
-            f"أنت محلل مخاطر أول في بنك مصري كبير.\n"
-            f"هذه عناوين أخبار اليوم {date_str} من مختلف القطاعات:\n\n"
-            + "\n".join(f"- {h}" for h in all_headlines_for_overview[:40])
-            + "\n\nاكتب نظرة عامة تحليلية مختصرة (فقرة واحدة أو اثنتان) تجيب على:\n"
-            f"1. ما الاتجاه العام للسوق اليوم؟\n"
-            f"2. أبرز إشارة خطر أو فرصة تستحق الانتباه؟\n"
-            f"باللغة العربية المهنية، بدون مقدمات."
-        )
-        overview = ask_gemini(overview_prompt)
-        if overview:
-            overview = overview.replace("**", "*")
-            send(
-                f"🔭 *النظرة العامة — {escape_md(date_str)}*\n"
-                f"{'━'*16}\n\n{overview}\n\n🛡 @egypt\\_risk\\_radar",
-                parse_mode="Markdown",
+def ask_gemini(prompt):
+    if not GEMINI_KEY:
+        print("❌ GEMINI_API_KEY غير موجود")
+        return None
+    for attempt in range(1, 3):
+        try:
+            r = requests.post(
+                GEMINI_ENDPOINT,
+                params={"key": GEMINI_KEY},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 3500},
+                },
+                timeout=90,
             )
-            time.sleep(3)
-
-    send(
-        f"✅ *انتهى موجز {escape_md(date_str)}*\n\n"
-        f"تابع أخبار السوق لحظة بلحظة\n🛡 @egypt\\_risk\\_radar",
-        parse_mode="Markdown",
-    )
-    print("✅ انتهى الموجز اليومي")
-
-
-# ══════════════════════════════════════════════════════════════════
-# التقرير اليومي والأسبوعي
-# ══════════════════════════════════════════════════════════════════
-def build_report_prompt(period_label, grouped, total, date_info):
-    """بناء prompt التقرير الشامل"""
-    sections = []
-    for tab, headlines in grouped.items():
-        label = TAB_LABELS.get(tab, tab)
-        sample = "\n".join(f"  - {h}" for h in headlines[:8])
-        sections.append(f"**{label}** ({len(headlines)} خبر):\n{sample}")
-    sections_text = "\n\n".join(sections)
-
-    return (
-        f"أنت كبير محللي المخاطر في بنك مصري كبير.\n"
-        f"هذا {period_label} بتاريخ {date_info}.\n"
-        f"إجمالي الأخبار: {total} خبراً في {len(grouped)} قطاعات.\n\n"
-        f"الأخبار المصنفة:\n{sections_text}\n\n"
-        f"اكتب تقريراً مهنياً شاملاً يتضمن:\n"
-        f"1. ملخص تنفيذي (3-4 أسطر): الصورة العامة للسوق\n"
-        f"2. أبرز إشارات الخطر المبكر: ما يجب مراقبته فوراً\n"
-        f"3. تحليل القطاعات: القطاعات الأكثر نشاطاً وأسباب ذلك\n"
-        f"4. المؤشرات الائتمانية: قراءة في حركة الائتمان والتمويل\n"
-        f"5. التوصيات: 2-3 توصيات عملية لفريق المخاطر والائتمان\n\n"
-        f"الأسلوب: مهني، دقيق، موجز. باللغة العربية. بدون مقدمات."
-    )
+            if r.status_code == 200:
+                candidates = r.json().get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    answer = "".join(p.get("text", "") for p in parts if p.get("text"))
+                    if answer.strip():
+                        return answer.strip()
+                print("Gemini: لا يوجد محتوى")
+                return None
+            print(f"Gemini HTTP {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            print(f"Gemini error attempt {attempt}: {e}")
+        if attempt < 2:
+            time.sleep(2)
+    return None
 
 
 def send_report_to_telegram(title, analysis, date_str, period_icon="📊"):
-    """إرسال التقرير على تليجرام مع تنسيق احترافي"""
-    analysis = (analysis or "").replace("**", "*")
+    if not analysis:
+        return False
     header = (
         f"{period_icon} *{escape_md(title)}*\n"
-        f"{'━'*20}\n"
-        f"📅 {escape_md(date_str)}\n"
-        f"{'━'*20}\n\n"
+        f"{'━'*20}\n📅 {escape_md(date_str)}\n{'━'*20}\n\n"
     )
     footer = f"\n\n{'━'*20}\n🛡 @egypt\\_risk\\_radar"
-    send(header + escape_md(analysis) + footer, parse_mode="Markdown")
+    return send(header + escape_md(str(analysis).replace("**", "")) + footer, parse_mode="Markdown")
+
+
+def scheduled_run():
+    return os.environ.get("GITHUB_EVENT_NAME", "").strip().lower() == "schedule"
+
+
+def report_already_done(tab_key, digest_date):
+    if not supabase_ready():
+        return False
+    try:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/digest",
+            params={"select": "tab_key", "tab_key": f"eq.{tab_key}",
+                    "digest_date": f"eq.{digest_date}", "limit": "1"},
+            headers=sb_headers(), timeout=10,
+        )
+        if r.status_code == 200:
+            return bool(r.json())
+        print(f"⚠️ report marker HTTP {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"⚠️ report marker error: {e}")
+    return False
+
+
+def run_daily_digest():
+    """موجز 10 مساءً: Gemini واحد فقط."""
+    print("📊 جاري إعداد الموجز اليومي...")
+    news = supabase_get_last_24h()
+    if news is None:
+        print("❌ تعذر قراءة Supabase")
+        return
+    if not news:
+        print("لا توجد أخبار في الـ24 ساعة الماضية")
+        return
+
+    grouped = group_by_tab(news)
+    now = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+    date_str = now.strftime("%d/%m/%Y")
+
+    send(
+        f"🗞️ *موجز أنباء وتحليلات — {escape_md(date_str)}*\n"
+        f"_تقرير يومي لمتخصصي الائتمان والمخاطر_\n\n"
+        f"رصدنا *{len(news)}* خبراً في *{len(grouped)}* تبويبات.\n"
+        f"🛡 @egypt\\_risk\\_radar",
+        parse_mode="Markdown",
+    )
+
+    ordered = sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99)
+    blocks = []
+    for tab in ordered:
+        blocks.append(
+            f"*{escape_md(TAB_LABELS.get(tab, tab))}* — {len(grouped[tab])} خبر\n" +
+            "\n".join(f"• {escape_md(h)}" for h in grouped[tab][:12])
+        )
+    send("\n\n".join(blocks) + "\n\n🛡 @egypt\\_risk\\_radar", parse_mode="Markdown")
+
+    print("  🤖 Gemini: تحليل يومي موحد (1 call)...")
+    analysis = ask_gemini(
+        build_ai_prompt("الموجز اليومي", f"{date_str} — آخر 24 ساعة", news, weekly=False)
+    )
+    if analysis:
+        send_report_to_telegram("تحليل المخاطر اليومي", analysis, date_str, "🔍")
+        supabase_save_digest("daily_digest", "الموجز اليومي", analysis, len(news), now.strftime("%Y-%m-%d"))
+
+    send(
+        f"✅ *انتهى موجز {escape_md(date_str)}*\n"
+        f"عدد الأخبار: {len(news)}\n\n🛡 @egypt\\_risk\\_radar",
+        parse_mode="Markdown",
+    )
 
 
 def run_daily_report():
-    """التقرير اليومي الشامل — صباحاً"""
     print("📊 جاري إعداد التقرير اليومي الشامل...")
-    news = supabase_get_last_24h()
-    if not news:
-        print("لا توجد أخبار كافية")
+    now = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+    date_key = now.strftime("%Y-%m-%d")
+
+    if scheduled_run() and report_already_done("report_daily", date_key):
+        print(f"⏭️ التقرير اليومي {date_key} تم إرساله مسبقاً")
         return
 
-    grouped  = group_by_tab(news)
-    now      = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
-    date_str = now.strftime("%d/%m/%Y")
+    news = supabase_get_news_for_pdf()
+    if news is None:
+        print("❌ تعذر قراءة الأخبار من Supabase")
+        return
+    if not news:
+        print("لا توجد أخبار في آخر 24 ساعة")
+        return
 
-    # إحصاءات سريعة
+    grouped = group_by_tab(news)
     warning_count = len(grouped.get("warning", []))
-    credit_count  = len(grouped.get("credit", []) + grouped.get("banks", []))
-    top_sector    = max(
+    credit_count = len(grouped.get("credit", [])) + len(grouped.get("banks", []))
+    top_sector = max(
         ((k, v) for k, v in grouped.items() if k.startswith("sector_")),
         key=lambda x: len(x[1]), default=("—", [])
     )
+    date_str = now.strftime("%d/%m/%Y %H:%M")
 
-    # مقدمة التقرير
-    intro = (
-        f"📊 *التقرير اليومي — {escape_md(date_str)}*\n"
-        f"{'━'*20}\n"
-        f"📰 إجمالي الأخبار: *{len(news)}* في *{len(grouped)}* قطاعات\n"
-        f"⚠️ إشارات إنذار مبكر: *{warning_count}*\n"
-        f"💰 أخبار ائتمان وبنوك: *{credit_count}*\n"
-        f"🏭 القطاع الأكثر نشاطاً: *{escape_md(TAB_LABELS.get(top_sector[0], top_sector[0]))}*"
-        f" ({len(top_sector[1])} خبر)\n"
-        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar"
+    send(
+        f"📊 *التقرير اليومي — {escape_md(date_str)}*\n{'━'*20}\n"
+        f"📰 إجمالي الأخبار: *{len(news)}*\n"
+        f"⚠️ إنذار مبكر: *{warning_count}*\n"
+        f"💰 ائتمان + بنوك: *{credit_count}*\n"
+        f"🏭 الأكثر نشاطاً: *{escape_md(TAB_LABELS.get(top_sector[0], top_sector[0]))}* ({len(top_sector[1])})\n"
+        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar",
+        parse_mode="Markdown",
     )
-    send(intro, parse_mode="Markdown")
-    time.sleep(3)
 
-    # التحليل الشامل من Gemini
-    print("  🤖 Gemini: التقرير الشامل...")
-    prompt   = build_report_prompt("تقرير يومي شامل", grouped, len(news), date_str)
-    analysis = ask_gemini(prompt)
-
+    print("  🤖 Gemini: التقرير اليومي الموحد (1 call)...")
+    analysis = ask_gemini(
+        build_ai_prompt("تقرير يومي شامل", f"آخر 24 ساعة حتى {date_str}", news, weekly=False)
+    )
     if analysis:
         send_report_to_telegram("التحليل والتوصيات اليومية", analysis, date_str, "🔍")
-    else:
-        # fallback: عناوين مفصلة بدون Gemini
-        for tab in sorted(grouped, key=lambda x: DIGEST_PRIORITY.index(x) if x in DIGEST_PRIORITY else 99):
-            tab_label = TAB_LABELS.get(tab, tab)
-            hl = "\n".join(f"• {escape_md(h)}" for h in grouped[tab][:10])
-            send(
-                f"*{escape_md(tab_label)}* | {len(grouped[tab])} خبر\n{'━'*16}\n{hl}\n\n🛡 @egypt\\_risk\\_radar",
-                parse_mode="Markdown",
-            )
-            time.sleep(3)
 
+    try:
+        pdf_bytes = generate_daily_pdf(news, now, ai_analysis=analysis)
+        pdf_ok = send_pdf(pdf_bytes, now.strftime("%d/%m/%Y"))
+    except Exception as e:
+        print(f"❌ Daily report PDF error: {e}")
+        pdf_ok = False
+
+    if pdf_ok and scheduled_run():
+        supabase_save_digest("report_daily", "التقرير اليومي الآلي", "sent", len(news), date_key)
     print("✅ انتهى التقرير اليومي")
 
 
 def run_weekly_report():
-    """التقرير الأسبوعي الشامل — الأحد"""
     print("📅 جاري إعداد التقرير الأسبوعي...")
-    news = supabase_get_last_7days()
-    if not news:
-        print("لا توجد أخبار كافية")
+    start_utc, end_utc, start_date, end_date = get_previous_completed_week_bounds()
+    marker = start_date.strftime("%Y-%m-%d")
+
+    if scheduled_run() and report_already_done("report_weekly", marker):
+        print(f"⏭️ التقرير الأسبوعي الذي يبدأ {marker} تم إرساله مسبقاً")
         return
 
-    grouped  = group_by_tab(news)
-    now      = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
-    week_end = now.strftime("%d/%m/%Y")
-    week_start = (now - timedelta(days=6)).strftime("%d/%m/%Y")
-    period   = f"{week_start} — {week_end}"
+    news = supabase_get_news_between(start_utc, end_utc, "title,url,source_name,tabs,created_at")
+    if news is None:
+        print("❌ تعذر قراءة الأخبار من Supabase")
+        return
+    if not news:
+        print("لا توجد أخبار في الأسبوع المكتمل")
+        return
 
-    # توزيع الأخبار يومياً
+    grouped = group_by_tab(news)
     daily_counts = {}
     for item in news:
-        try:
-            day = datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")).astimezone(CAIRO_TZ).strftime("%d/%m")
-            daily_counts[day] = daily_counts.get(day, 0) + 1
-        except Exception:
-            pass
+        dt = item_cairo_dt(item)
+        if dt:
+            key = dt.strftime("%d/%m")
+            daily_counts[key] = daily_counts.get(key, 0) + 1
 
+    period = f"{start_date.strftime('%d/%m/%Y')} — {end_date.strftime('%d/%m/%Y')}"
     daily_summary = " | ".join(f"{d}: {c}" for d, c in sorted(daily_counts.items()))
 
-    # مقدمة التقرير
-    intro = (
-        f"📅 *التقرير الأسبوعي — {escape_md(period)}*\n"
-        f"{'━'*20}\n"
-        f"📰 إجمالي الأخبار: *{len(news)}* خبر\n"
+    send(
+        f"📅 *التقرير الأسبوعي — {escape_md(period)}*\n{'━'*20}\n"
+        f"📰 إجمالي الأخبار: *{len(news)}*\n"
         f"📊 التوزيع اليومي: {escape_md(daily_summary)}\n"
-        f"⚠️ إشارات إنذار: *{len(grouped.get('warning', []))}*\n"
-        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar"
+        f"⚠️ إنذارات: *{len(grouped.get('warning', []))}*\n"
+        f"{'━'*20}\n🛡 @egypt\\_risk\\_radar",
+        parse_mode="Markdown",
     )
-    send(intro, parse_mode="Markdown")
-    time.sleep(3)
 
-    # التحليل الأسبوعي من Gemini
-    print("  🤖 Gemini: التقرير الأسبوعي...")
-    weekly_prompt = (
-        build_report_prompt("تقرير أسبوعي شامل", grouped, len(news), period)
-        + "\n\nأضف في النهاية: 6. توقعات الأسبوع القادم بناءً على الاتجاهات الحالية."
+    print("  🤖 Gemini: التقرير الأسبوعي الموحد (1 call)...")
+    analysis = ask_gemini(
+        build_ai_prompt("تقرير أسبوعي شامل", period, news, weekly=True)
     )
-    analysis = ask_gemini(weekly_prompt)
     if analysis:
         send_report_to_telegram("التحليل والتوقعات الأسبوعية", analysis, period, "📅")
 
+    try:
+        pdf_bytes = generate_weekly_pdf(news, start_date, end_date, ai_analysis=analysis)
+        filename = f"رادار_المخاطر_أسبوع_{start_date.strftime('%Y-%m-%d')}.pdf"
+        caption = (
+            f"📅 *التقرير الأسبوعي — {escape_md(period)}*\n"
+            f"_جميع أخبار الأسبوع، بدون استثناء، مرتبة يومياً ومصنفة._\n\n"
+            f"🛡 @egypt\\_risk\\_radar"
+        )
+        pdf_ok = send_pdf_to_chat(pdf_bytes, CHANNEL_ID, filename, caption)
+    except Exception as e:
+        print(f"❌ Weekly report PDF error: {e}")
+        pdf_ok = False
+
+    if pdf_ok and scheduled_run():
+        supabase_save_digest("report_weekly", "التقرير الأسبوعي الآلي", "sent", len(news), marker)
     print("✅ انتهى التقرير الأسبوعي")
+
+
+def supabase_get_digest_content(tab_key, digest_date):
+    if not supabase_ready():
+        return None
+    try:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/digest",
+            params={"select": "content", "tab_key": f"eq.{tab_key}",
+                    "digest_date": f"eq.{digest_date}", "limit": "1"},
+            headers=sb_headers(), timeout=10,
+        )
+        if r.status_code == 200:
+            rows = r.json()
+            return rows[0].get("content") if rows else None
+    except Exception as e:
+        print(f"Supabase digest content error: {e}")
+    return None
+
+
+def send_to_chat(chat_id, text, parse_mode="HTML", max_retries=3):
+    if not BOT_TOKEN or not text:
+        return False
+    chunks, t = [], str(text)
+    while len(t) > MAX_TG_MSG:
+        cut = t.rfind("\n", 0, MAX_TG_MSG)
+        if cut < MAX_TG_MSG * 0.5:
+            cut = MAX_TG_MSG
+        chunks.append(t[:cut])
+        t = t[cut:].lstrip()
+    if t:
+        chunks.append(t)
+
+    for chunk in chunks:
+        sent = False
+        for attempt in range(1, max_retries + 1):
+            payload = {"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True}
+            if parse_mode:
+                payload["parse_mode"] = parse_mode
+            try:
+                r = requests.post(f"{API_URL}/sendMessage", json=payload, timeout=TELEGRAM_TIMEOUT)
+                if r.status_code == 200:
+                    sent = True
+                    break
+                if r.status_code == 429:
+                    try:
+                        wait = int(r.json().get("parameters", {}).get("retry_after", 5))
+                    except Exception:
+                        wait = 5
+                    time.sleep(min(max(wait, 2), 60))
+                    continue
+                if r.status_code == 400 and parse_mode:
+                    r2 = requests.post(
+                        f"{API_URL}/sendMessage",
+                        json={"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True},
+                        timeout=TELEGRAM_TIMEOUT,
+                    )
+                    if r2.status_code == 200:
+                        sent = True
+                        break
+            except Exception as e:
+                print(f"⚠️ private Telegram error attempt {attempt}: {e}")
+            time.sleep(min(attempt * 2, 10))
+        if not sent:
+            return False
+    return True
+
+
+def telegram_webhook_configured():
+    try:
+        r = requests.get(f"{API_URL}/getWebhookInfo", timeout=15)
+        if r.status_code == 200 and r.json().get("result", {}).get("url"):
+            print("⚠️ Telegram webhook مفعّل؛ getUpdates لن يعمل.")
+            return True
+    except Exception as e:
+        print(f"⚠️ Webhook check error: {e}")
+    return False
+
+
+def telegram_get_updates(offset=None, limit=100):
+    if telegram_webhook_configured():
+        return None
+    params = {"timeout": 1, "limit": limit}
+    if offset is not None:
+        params["offset"] = offset
+    try:
+        r = requests.get(f"{API_URL}/getUpdates", params=params, timeout=10)
+        if r.status_code == 409:
+            print("⚠️ Telegram 409: webhook/another getUpdates consumer.")
+            return None
+        if r.status_code != 200:
+            print(f"⚠️ getUpdates {r.status_code}: {r.text[:250]}")
+            return None
+        return r.json().get("result", [])
+    except Exception as e:
+        print(f"⚠️ getUpdates error: {e}")
+        return None
+
+
+def poll_dailyrep_commands():
+    """dailyrep خاص بالرسائل الخاصة، وبدون Gemini."""
+    if not supabase_ready():
+        print("⚠️ dailyrep متوقف: يحتاج Supabase لحفظ Telegram offset.")
+        return
+
+    state = supabase_get_digest_content("telegram_update_offset", "state")
+    try:
+        offset = int(state) if state else None
+    except Exception:
+        offset = None
+
+    updates = telegram_get_updates(offset=offset)
+    if updates is None or not updates:
+        return
+
+    admin_ids = {x.strip() for x in os.environ.get("ADMIN_CHAT_IDS", "").split(",") if x.strip()}
+    max_update_id = max(u.get("update_id", 0) for u in updates)
+
+    for update in updates:
+        message = update.get("message") or update.get("edited_message")
+        if not message:
+            continue
+        chat = message.get("chat", {})
+        chat_id = str(chat.get("id", ""))
+        if chat.get("type") != "private":
+            continue
+        if admin_ids and chat_id not in admin_ids:
+            continue
+
+        text = str(message.get("text", "")).strip()
+        if not text:
+            continue
+        first = text.split()[0].lower()
+        command = "/dailyrep" if first.startswith("/dailyrep@") else first
+        if command not in ("dailyrep", "/dailyrep"):
+            continue
+
+        print(f"📋 dailyrep requested by {chat_id}")
+        send_to_chat(chat_id, "📋 جاري تجهيز تقرير أخبار اليوم حتى الآن — بدون Gemini...", parse_mode="Markdown")
+
+        now = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+        start_cairo = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        news = supabase_get_news_between(
+            start_cairo.astimezone(timezone.utc),
+            now.astimezone(timezone.utc),
+            "title,url,source_name,tabs,created_at",
+        )
+        if news is None:
+            send_to_chat(chat_id, "❌ تعذر قراءة الأخبار من Supabase.", parse_mode=None)
+            continue
+        if not news:
+            send_to_chat(chat_id, "لا توجد أخبار مسجلة اليوم حتى الآن.", parse_mode=None)
+            continue
+
+        try:
+            pdf_bytes = generate_daily_pdf(
+                news, now, ai_analysis=None, title="تقرير أخبار اليوم حتى الآن"
+            )
+            filename = f"رادار_المخاطر_dailyrep_{now.strftime('%Y-%m-%d')}.pdf"
+            caption = (
+                f"📋 *dailyrep — {escape_md(now.strftime('%d/%m/%Y %H:%M'))}*\n"
+                f"_كل الأخبار المسجلة من 00:00 حتى الآن، بدون Gemini._\n"
+                f"📰 {len(news)} خبر\n\n🛡 @egypt\\_risk\\_radar"
+            )
+            send_pdf_to_chat(pdf_bytes, chat_id, filename, caption)
+        except Exception as e:
+            print(f"❌ dailyrep PDF error: {e}")
+            send_to_chat(chat_id, f"❌ فشل إنشاء PDF: {e}", parse_mode=None)
+
+    supabase_save_digest(
+        "telegram_update_offset", "Telegram update offset",
+        str(max_update_id + 1), 0, "state"
+    )
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1323,12 +1787,9 @@ def run():
     mode = os.environ.get("RUN_MODE", "news").strip().lower()
     print(f"⚙️  RUN_MODE = {mode}")
 
-    # فحص BOT_TOKEN
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN غير موجود — إيقاف")
         return
-
-    # فحص الـ token صحيح
     if not telegram_bot_ok():
         print("❌ BOT_TOKEN غير صالح — إيقاف")
         return
@@ -1336,31 +1797,31 @@ def run():
     if mode == "digest":
         run_daily_digest()
         return
-
     if mode == "report_daily":
         run_daily_report()
         return
-
     if mode == "report_weekly":
         run_weekly_report()
         return
-
     if mode == "pdf":
         run_pdf_report()
         return
+    if mode == "weekly_pdf":
+        run_weekly_pdf_report()
+        return
 
-    # ── وضع الأخبار ──
     print("\n📦 جاري تحميل الأخبار المرسلة من Supabase...")
     sent_hashes = supabase_get_hashes()
-
-    # ← وقف فوري لو Supabase فشل (None = خطأ اتصال)
     if sent_hashes is None:
         print("❌ ABORT: Supabase غير متاح — وقف منعاً للتكرار")
         return
 
     recent_news = supabase_get_recent_news_for_dedupe()
-    print(f"   {len(sent_hashes)} hash | {len(recent_news)} خبر في ذاكرة التكرار")
+    if recent_news is None:
+        print("❌ ABORT: تعذر قراءة ذاكرة التكرار من Supabase")
+        return
 
+    print(f"   {len(sent_hashes)} hash | {len(recent_news)} خبر في ذاكرة التكرار")
     new_count = 0
 
     print("\n════════ RSS SOURCES ════════")
@@ -1375,7 +1836,7 @@ def run():
 
     print("\n════════ SCRAPING SOURCES ════════")
     for src in SCRAPE_SOURCES:
-        print(f"\n  🕷️  Scraping: {src['name']}...")
+        print(f"\n  🕷️ Scraping: {src['name']}...")
         try:
             count, sent_hashes, recent_news = fetch_scrape(src, sent_hashes, recent_news)
             new_count += count
@@ -1386,6 +1847,9 @@ def run():
     print("\n══════════════════════════════════════════")
     print(f"✅ تم نشر {new_count} خبر جديد")
     print("══════════════════════════════════════════\n")
+
+    # تنفيذ /dailyrep بعد جمع أخبار الدورة الحالية.
+    poll_dailyrep_commands()
 
 
 if __name__ == "__main__":
