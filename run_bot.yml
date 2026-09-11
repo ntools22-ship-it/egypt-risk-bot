@@ -19,6 +19,7 @@ on:
           - report_daily
           - report_weekly
           - pdf
+          - commands
 
 concurrency:
   group: egypt-risk-radar-bot
@@ -67,3 +68,22 @@ jobs:
           SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
           RUN_MODE:       ${{ steps.mode.outputs.mode }}
         run: python bot.py
+
+  commands-listener:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'commands'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install feedparser requests beautifulsoup4 fpdf2 arabic-reshaper python-bidi
+      - name: Run commands listener
+        env:
+          BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL:   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY:   ${{ secrets.SUPABASE_KEY }}
+          RUN_MODE:       commands
+        run: python bot.py
+        timeout-minutes: 350
