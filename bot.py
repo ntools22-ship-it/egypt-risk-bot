@@ -1701,7 +1701,7 @@ def telegram_get_updates(offset=None, limit=100):
 
 
 def poll_dailyrep_commands():
-    """dailyrep خاص بالرسائل الخاصة، وبدون Gemini."""
+    """dailyrep للخاص والقناة/الجروب، وبدون Gemini."""
     if not supabase_ready():
         print("⚠️ dailyrep متوقف: يحتاج Supabase لحفظ Telegram offset.")
         return
@@ -1720,14 +1720,27 @@ def poll_dailyrep_commands():
     max_update_id = max(u.get("update_id", 0) for u in updates)
 
     for update in updates:
-        message = update.get("message") or update.get("edited_message")
+        # دعم الأمر من الخاص ومن داخل القناة/الجروب.
+        # Telegram يضع منشورات القناة في channel_post وليس message.
+        message = (
+            update.get("message")
+            or update.get("edited_message")
+            or update.get("channel_post")
+            or update.get("edited_channel_post")
+        )
         if not message:
             continue
+
         chat = message.get("chat", {})
         chat_id = str(chat.get("id", ""))
-        if chat.get("type") != "private":
-            continue
-        if admin_ids and chat_id not in admin_ids:
+        chat_type = chat.get("type")
+
+        # ADMIN_CHAT_IDS يقيّد الرسائل الخاصة فقط؛ أما القناة التي ينشر فيها
+        # البوت نفسه فيُسمح لها بتنفيذ dailyrep مباشرة.
+        if chat_type == "private":
+            if admin_ids and chat_id not in admin_ids:
+                continue
+        elif chat_type not in ("channel", "group", "supergroup"):
             continue
 
         text = str(message.get("text", "")).strip()
@@ -1765,7 +1778,8 @@ def poll_dailyrep_commands():
                 f"_كل الأخبار المسجلة من 00:00 حتى الآن، بدون Gemini._\n"
                 f"📰 {len(news)} خبر\n\n🛡 @egypt\\_risk\\_radar"
             )
-            send_pdf_to_chat(pdf_bytes, chat_id, filename, caption)
+            if not send_pdf_to_chat(pdf_bytes, chat_id, filename, caption):
+                send_to_chat(chat_id, "❌ تم تجهيز الـPDF لكن فشل إرساله إلى Telegram. راجع Log التشغيل.", parse_mode=None)
         except Exception as e:
             print(f"❌ dailyrep PDF error: {e}")
             send_to_chat(chat_id, f"❌ فشل إنشاء PDF: {e}", parse_mode=None)
