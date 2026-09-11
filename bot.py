@@ -1669,21 +1669,39 @@ def send_to_chat(chat_id, text, parse_mode="HTML", max_retries=3):
     return True
 
 
-def telegram_webhook_configured():
+def telegram_prepare_polling():
+    """GitHub Actions يستخدم getUpdates، لذلك أزل أي webhook قديم دون حذف الرسائل المعلقة."""
     try:
         r = requests.get(f"{API_URL}/getWebhookInfo", timeout=15)
-        if r.status_code == 200 and r.json().get("result", {}).get("url"):
-            print("⚠️ Telegram webhook مفعّل؛ getUpdates لن يعمل.")
-            return True
+        if r.status_code != 200:
+            print(f"⚠️ getWebhookInfo {r.status_code}: {r.text[:250]}")
+            return False
+        info = r.json().get("result", {}) or {}
+        webhook_url = info.get("url", "")
+        if webhook_url:
+            print(f"⚠️ Webhook موجود ({webhook_url}) — تحويل البوت إلى polling...")
+            d = requests.post(
+                f"{API_URL}/deleteWebhook",
+                json={"drop_pending_updates": False},
+                timeout=15,
+            )
+            if d.status_code == 200 and d.json().get("ok"):
+                print("✅ تم حذف الـ webhook مع الاحتفاظ بالتحديثات المعلقة")
+                return True
+            print(f"❌ فشل deleteWebhook {d.status_code}: {d.text[:300]}")
+            return False
+        return True
     except Exception as e:
-        print(f"⚠️ Webhook check error: {e}")
-    return False
+        print(f"⚠️ Telegram polling preparation error: {e}")
+        return False
 
 
 def telegram_get_updates(offset=None, limit=100):
-    if telegram_webhook_configured():
-        return None
-    params = {"timeout": 1, "limit": limit}
+    params = {
+        "timeout": 1,
+        "limit": limit,
+        "allowed_updates": '["message","edited_message","channel_post","edited_channel_post"]',
+    }
     if offset is not None:
         params["offset"] = offset
     try:
@@ -1743,7 +1761,7 @@ def poll_dailyrep_commands():
         elif chat_type not in ("channel", "group", "supergroup"):
             continue
 
-        text = str(message.get("text", "")).strip()
+        text = str(message.get("text") or message.get("caption") or "").strip()
         if not text:
             continue
         first = text.split()[0].lower()
@@ -1807,6 +1825,12 @@ def run():
     if not telegram_bot_ok():
         print("❌ BOT_TOKEN غير صالح — إيقاف")
         return
+
+    # هذا البوت يعمل من GitHub Actions؛ يجب أن يكون Telegram في polling mode.
+    telegram_prepare_polling()
+
+    # افحص الأوامر أولاً حتى لا تنتظر نهاية جمع الأخبار.
+    poll_dailyrep_commands()
 
     if mode == "digest":
         run_daily_digest()
