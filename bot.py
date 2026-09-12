@@ -1669,6 +1669,69 @@ def handle_commands():
                 except Exception as e:
                     requests.post(f"{API_URL}/sendMessage",
                         json={"chat_id": chat_id, "text": f"❌ خطأ: {e}"}, timeout=10)
+
+                if text not in ("dailyai", "/dailyai"):
+                    continue
+                print(f"📥 dailyai من {chat_id}")
+                now_cairo = datetime.now(timezone.utc).astimezone(CAIRO_TZ)
+                news      = get_today_news_for_pdf()
+                if not news:
+                    requests.post(f"{API_URL}/sendMessage",
+                        json={"chat_id": chat_id, "text": "لا توجد أخبار اليوم حتى الآن."}, timeout=10)
+                    continue
+                date_str = now_cairo.strftime("%d/%m/%Y")
+                time_str = now_cairo.strftime("%H:%M")
+                # إرسال إشعار الانتظار
+                requests.post(f"{API_URL}/sendMessage",
+                    json={"chat_id": chat_id,
+                          "text": f"⏳ جاري تحليل {len(news)} خبر بالذكاء الاصطناعي..."}, timeout=10)
+                # تجميع العناوين
+                grouped = {}
+                for item in news:
+                    for tab in item.get("tabs", []):
+                        grouped.setdefault(tab, []).append(item.get("title", ""))
+                headlines_all = "\n".join(
+                    f"[{TAB_LABELS.get(tab, tab)}] {h}"
+                    for tab, hs in grouped.items() for h in hs
+                )
+                prompt = (
+                    f"أنت خبير مصرفي أول متخصص في المخاطر والائتمان في أحد كبرى البنوك المصرية.\n"
+                    f"التاريخ: {date_str} — الساعة {time_str}\n"
+                    f"فيما يلي عناوين أخبار اليوم ({len(news)} خبر) مصنفة بالقطاعات:\n\n"
+                    f"{headlines_all}\n\n"
+                    f"اكتب تحليلاً مهنياً شاملاً يتضمن:\n"
+                    f"1. 🔴 المخاطر: أبرز مؤشرات الخطر التي تستوجب انتباه فريق المخاطر والائتمان\n"
+                    f"2. 🟢 الفرص: فرص ائتمانية أو استثمارية يمكن استثمارها\n"
+                    f"3. 🏦 القطاع المصرفي: تداعيات الأخبار على البنوك والسيولة وقرارات الائتمان\n"
+                    f"4. ⚠️ إنذارات مبكرة: أحداث قد تتطور لمشكلات ائتمانية أو مخاطر تشغيلية\n"
+                    f"5. 📋 توصيات: 3 توصيات عملية فورية لفريق المخاطر\n\n"
+                    f"الأسلوب: مهني، دقيق، موجز. باللغة العربية. بدون مقدمات أو تحيات."
+                )
+                analysis = ask_gemini(prompt)
+                if not analysis:
+                    requests.post(f"{API_URL}/sendMessage",
+                        json={"chat_id": chat_id, "text": "❌ فشل تحليل Gemini، حاول لاحقاً."}, timeout=10)
+                    continue
+                analysis = analysis.replace("**", "*")
+                msg = (
+                    f"🤖 *تحليل ذكاء اصطناعي — {escape_md(date_str)} | {escape_md(time_str)}*\n"
+                    f"{'━'*22}\n\n"
+                    f"{analysis}\n\n"
+                    f"{'━'*22}\n"
+                    f"🛡 @egypt\\_risk\\_radar"
+                )
+                send_result = requests.post(
+                    f"{API_URL}/sendMessage",
+                    json={"chat_id": chat_id, "text": msg,
+                          "parse_mode": "Markdown", "disable_web_page_preview": True},
+                    timeout=30,
+                )
+                if send_result.status_code != 200:
+                    # fallback بدون markdown
+                    requests.post(f"{API_URL}/sendMessage",
+                        json={"chat_id": chat_id, "text": analysis}, timeout=30)
+                print(f"✅ dailyai أُرسل")
+
         except Exception as e:
             print(f"getUpdates error: {e}")
             time.sleep(5)
