@@ -271,6 +271,20 @@ SCRAPE_SOURCES = [
         "base": "https://www.firstbankeg.com",
         "exclude": [],
     },
+    {
+        "id": "youm7_incidents",
+        "name": "اليوم السابع - حوادث",
+        "url": "https://m.youm7.com/Section/%D8%AD%D9%88%D8%A7%D8%AF%D8%AB/203/1",
+        "tab": "sector_industry",
+        "base": "https://m.youm7.com",
+        "exclude": [],
+        "require_any": [
+            ["حريق", "مصنع"],
+            ["حريق", "بمصنع"],
+            ["حريق", "مخزن"],
+        ],
+        "min_absolute_date": "2026-09-12",  # أخبار من 12 سبتمبر 2026 فقط
+    },
     # ── المركزي ───────────────────────────────────────────────────
     {
         "id": "almal_cbe",
@@ -626,6 +640,13 @@ def passes_require_kw(title, require_kw):
     return all(kw in title for kw in require_kw)
 
 
+def passes_require_any(title, require_any):
+    """require_any: قائمة من المجموعات — يكفي تحقق أي مجموعة كاملة"""
+    if not require_any:
+        return True
+    return any(all(kw in title for kw in group) for group in require_any)
+
+
 def is_recent(dt, max_hours=24):
     if not dt:
         return False
@@ -743,7 +764,7 @@ def is_duplicate(title, url, source_name, recent_news):
 # ══════════════════════════════════════════════════════════════════
 def process_item(title, url, source_name, primary_tab, summary,
                  exclude, sent_hashes, recent_news,
-                 published_at=None, require_kw=None):
+                 published_at=None, require_kw=None, require_any=None):
 
     if not title or not url:
         return False, sent_hashes, recent_news
@@ -759,6 +780,8 @@ def process_item(title, url, source_name, primary_tab, summary,
         return False, sent_hashes, recent_news
 
     if not passes_require_kw(title, require_kw or []):
+        return False, sent_hashes, recent_news
+    if not passes_require_any(title, require_any or []):
         return False, sent_hashes, recent_news
 
     # فلتر التاريخ — فقط لو موجود (RSS)
@@ -902,13 +925,26 @@ def fetch_scrape(src, sent_hashes, recent_news):
 
         for title, link in items:
             # ← لا نطلب تاريخ المقال — hash + title dedup هو الضمان
+            # فلتر min_absolute_date: جلب تاريخ المقال فقط لهذا المصدر
+            if "min_absolute_date" in src:
+                art_date = extract_article_date(link)
+                if art_date is None:
+                    continue
+                min_dt = datetime.fromisoformat(src["min_absolute_date"]).replace(tzinfo=timezone.utc)
+                if art_date < min_dt:
+                    continue
+                pub_at = art_date
+            else:
+                pub_at = None
+
             ok, sent_hashes, recent_news = process_item(
                 title, link, src["name"], src["tab"],
                 "",
                 src.get("exclude", []),
                 sent_hashes, recent_news,
-                published_at=None,           # ← تجاهل فلتر التاريخ
+                published_at=pub_at,
                 require_kw=src.get("require_kw"),
+                require_any=src.get("require_any"),
             )
             if ok:
                 count += 1
